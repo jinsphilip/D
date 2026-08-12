@@ -33,87 +33,6 @@ function SiteForm({ site, onSave, onClose }) {
   );
 }
 
-function AssignStaffModal({ site, employees, onAssign, onClose }) {
-  const [search, setSearch] = React.useState('');
-  const [pending, setPending] = React.useState({}); // employeeId -> desired siteId (site.id or null)
-
-  const filtered = employees.filter((e) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q);
-  });
-
-  const effectiveSiteId = (emp) => (Object.prototype.hasOwnProperty.call(pending, emp.id) ? pending[emp.id] : emp.siteId);
-
-  const toggle = (emp) => {
-    setPending((prev) => {
-      const current = effectiveSiteId(emp);
-      const next = { ...prev };
-      next[emp.id] = current === site.id ? null : site.id;
-      return next;
-    });
-  };
-
-  const changedCount = Object.keys(pending).length;
-
-  const save = () => {
-    onAssign(pending);
-    onClose();
-  };
-
-  return (
-    <Modal title={`Assign Staff · ${site.name}`} onClose={onClose} wide>
-      <div className="mb-3 relative">
-        <Icon name="search" className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          className={inputClass + ' pl-9'}
-          placeholder="Search by name or employee ID..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      <div className="border border-slate-200 rounded-lg max-h-80 overflow-y-auto divide-y divide-slate-100">
-        {filtered.length === 0 ? (
-          <EmptyState icon="user-search" title="No matching employees" />
-        ) : filtered.map((emp) => {
-          const assignedTo = effectiveSiteId(emp);
-          const isAssignedHere = assignedTo === site.id;
-          const isMoving = pending.hasOwnProperty(emp.id) && emp.siteId && emp.siteId !== site.id && isAssignedHere;
-          return (
-            <label key={emp.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer touch-target">
-              <input
-                type="checkbox"
-                className="w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 shrink-0"
-                checked={isAssignedHere}
-                onChange={() => toggle(emp)}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-slate-800 truncate">{emp.name}</div>
-                <div className="text-xs text-slate-400">{emp.id} · {emp.designation}</div>
-              </div>
-              {isMoving && (
-                <Badge tone="amber">
-                  <Icon name="move-right" className="w-3 h-3" /> Migrating
-                </Badge>
-              )}
-              {!isMoving && isAssignedHere && (
-                <Badge tone="green">Assigned</Badge>
-              )}
-            </label>
-          );
-        })}
-      </div>
-      <div className="flex items-center justify-between pt-4">
-        <span className="text-xs text-slate-400">{changedCount > 0 ? `${changedCount} change(s) pending` : 'No changes yet'}</span>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={changedCount === 0}>Apply Assignment</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
 function SitesModule({ sites, setSites, employees, setEmployees, showToast }) {
   const [formSite, setFormSite] = React.useState(null); // null = closed, {} = new, site = edit
   const [assignSite, setAssignSite] = React.useState(null);
@@ -220,7 +139,14 @@ function SitesModule({ sites, setSites, employees, setEmployees, showToast }) {
         <SiteForm site={formSite.id ? formSite : null} onSave={saveSite} onClose={() => setFormSite(null)} />
       )}
       {assignSite && (
-        <AssignStaffModal site={assignSite} employees={employees} onAssign={applyAssignment} onClose={() => setAssignSite(null)} />
+        <AssignmentModal
+          title={`Assign Staff · ${assignSite.name}`}
+          entity={assignSite}
+          fieldName="siteId"
+          employees={employees}
+          onAssign={applyAssignment}
+          onClose={() => setAssignSite(null)}
+        />
       )}
       {deleteTarget && (
         <ConfirmDialog

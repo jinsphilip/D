@@ -1,4 +1,4 @@
-function EmployeeForm({ employee, sites, employees, onSave, onClose }) {
+function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
   const isEdit = !!employee;
   const [form, setForm] = React.useState(
     employee || {
@@ -11,6 +11,7 @@ function EmployeeForm({ employee, sites, employees, onSave, onClose }) {
       joinDate: todayISO(),
       status: 'Active',
       siteId: sites[0] ? sites[0].id : null,
+      messId: null,
     }
   );
   const [idError, setIdError] = React.useState('');
@@ -65,6 +66,12 @@ function EmployeeForm({ employee, sites, employees, onSave, onClose }) {
             {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </Field>
+        <Field label="Mess" hint="Optional">
+          <select className={selectClass} value={form.messId || ''} onChange={(e) => setForm({ ...form, messId: e.target.value || null })}>
+            <option value="">Not enrolled</option>
+            {messes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Field>
         <Field label="Status">
           <select className={selectClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
             <option value="Active">Active</option>
@@ -80,7 +87,7 @@ function EmployeeForm({ employee, sites, employees, onSave, onClose }) {
   );
 }
 
-function EmployeesModule({ employees, setEmployees, sites, settings, showToast }) {
+function EmployeesModule({ employees, setEmployees, sites, messes, settings, showToast }) {
   const [formEmp, setFormEmp] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [search, setSearch] = React.useState('');
@@ -115,6 +122,11 @@ function EmployeesModule({ employees, setEmployees, sites, settings, showToast }
   const reassign = (empId, siteId) => {
     setEmployees(employees.map((e) => (e.id === empId ? { ...e, siteId: siteId || null } : e)));
     showToast('Site reassigned');
+  };
+
+  const reassignMess = (empId, messId) => {
+    setEmployees(employees.map((e) => (e.id === empId ? { ...e, messId: messId || null } : e)));
+    showToast('Mess membership updated');
   };
 
   return (
@@ -152,6 +164,7 @@ function EmployeesModule({ employees, setEmployees, sites, settings, showToast }
                   <th className="px-4 py-2.5 font-medium">Department / Role</th>
                   <th className="px-4 py-2.5 font-medium">Base Salary</th>
                   <th className="px-4 py-2.5 font-medium">Site</th>
+                  <th className="px-4 py-2.5 font-medium">Mess</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
                   <th className="px-4 py-2.5 font-medium text-right">Actions</th>
                 </tr>
@@ -179,6 +192,16 @@ function EmployeesModule({ employees, setEmployees, sites, settings, showToast }
                       </select>
                     </td>
                     <td className="px-4 py-3">
+                      <select
+                        className={selectClass + ' !py-1.5 text-xs min-w-[150px]'}
+                        value={emp.messId || ''}
+                        onChange={(e) => reassignMess(emp.id, e.target.value)}
+                      >
+                        <option value="">Not enrolled</option>
+                        {messes.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3">
                       <Badge tone={emp.status === 'Active' ? 'green' : 'slate'}>{emp.status}</Badge>
                     </td>
                     <td className="px-4 py-3">
@@ -200,7 +223,7 @@ function EmployeesModule({ employees, setEmployees, sites, settings, showToast }
       )}
 
       {formEmp !== null && (
-        <EmployeeForm employee={formEmp.id ? formEmp : null} sites={sites} employees={employees} onSave={saveEmployee} onClose={() => setFormEmp(null)} />
+        <EmployeeForm employee={formEmp.id ? formEmp : null} sites={sites} messes={messes} employees={employees} onSave={saveEmployee} onClose={() => setFormEmp(null)} />
       )}
       {deleteTarget && (
         <ConfirmDialog

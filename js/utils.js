@@ -8,10 +8,14 @@ const STORAGE_KEYS = {
   employees: 'nep_employees',
   attendance: 'nep_attendance',
   settings: 'nep_settings',
+  messes: 'nep_messes',
+  messExpenses: 'nep_mess_expenses',
+  advances: 'nep_advances',
 };
 
 const DEPARTMENTS = ['Operations', 'Engineering', 'Quality Control', 'Logistics', 'Administration'];
 const SITE_STATUSES = ['Active', 'On Hold', 'Completed'];
+const MESS_STATUSES = ['Active', 'Inactive'];
 const OT_LEVELS = [0, 1.0, 1.5];
 const ATTENDANCE_STATUSES = ['present', 'halfday', 'absent'];
 
@@ -24,6 +28,18 @@ function todayISO() {
 
 function currentMonthStr() {
   const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+
+function nextMonthStr(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const d = new Date(y, m, 1); // m is already "next month index" in 0-based terms
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+
+function prevMonthStr(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 
@@ -49,6 +65,15 @@ function nextSiteId(sites) {
   return `SITE-${max + 1}`;
 }
 
+function nextMessId(messes) {
+  let max = 0;
+  messes.forEach((m) => {
+    const match = /^MESS-(\d+)$/.exec(m.id);
+    if (match) max = Math.max(max, parseInt(match[1], 10));
+  });
+  return `MESS-${max + 1}`;
+}
+
 // ---------------------------------------------------------------------------
 // Seed data
 // ---------------------------------------------------------------------------
@@ -64,14 +89,35 @@ function seedSites() {
 
 function seedEmployees() {
   return [
-    { id: 'EMP101', name: 'Alexander Wright', department: 'Operations', designation: 'Supervisor', baseSalary: 45000, phone: '+1 555-0192', joinDate: '2023-01-15', status: 'Active', siteId: 'SITE-101' },
-    { id: 'EMP102', name: 'Maria Gonzalez', department: 'Engineering', designation: 'Site Engineer', baseSalary: 52000, phone: '+1 555-0234', joinDate: '2023-03-10', status: 'Active', siteId: 'SITE-101' },
-    { id: 'EMP103', name: 'David Chen', department: 'Quality Control', designation: 'QC Inspector', baseSalary: 38000, phone: '+1 555-0345', joinDate: '2023-05-20', status: 'Active', siteId: 'SITE-102' },
-    { id: 'EMP104', name: 'Priya Sharma', department: 'Logistics', designation: 'Logistics Coordinator', baseSalary: 34000, phone: '+1 555-0456', joinDate: '2023-02-01', status: 'Active', siteId: 'SITE-102' },
-    { id: 'EMP105', name: "James O'Brien", department: 'Operations', designation: 'Foreman', baseSalary: 40000, phone: '+1 555-0567', joinDate: '2022-11-11', status: 'Active', siteId: 'SITE-103' },
-    { id: 'EMP106', name: 'Fatima Al-Sayed', department: 'Engineering', designation: 'Junior Engineer', baseSalary: 30000, phone: '+1 555-0678', joinDate: '2024-01-08', status: 'Active', siteId: 'SITE-101' },
-    { id: 'EMP107', name: 'Robert Kim', department: 'Logistics', designation: 'Driver', baseSalary: 26000, phone: '+1 555-0789', joinDate: '2023-08-19', status: 'Active', siteId: 'SITE-104' },
-    { id: 'EMP108', name: 'Elena Petrova', department: 'Quality Control', designation: 'Safety Officer', baseSalary: 36000, phone: '+1 555-0890', joinDate: '2023-06-30', status: 'Active', siteId: 'SITE-102' },
+    { id: 'EMP101', name: 'Alexander Wright', department: 'Operations', designation: 'Supervisor', baseSalary: 45000, phone: '+1 555-0192', joinDate: '2023-01-15', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
+    { id: 'EMP102', name: 'Maria Gonzalez', department: 'Engineering', designation: 'Site Engineer', baseSalary: 52000, phone: '+1 555-0234', joinDate: '2023-03-10', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
+    { id: 'EMP103', name: 'David Chen', department: 'Quality Control', designation: 'QC Inspector', baseSalary: 38000, phone: '+1 555-0345', joinDate: '2023-05-20', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
+    { id: 'EMP104', name: 'Priya Sharma', department: 'Logistics', designation: 'Logistics Coordinator', baseSalary: 34000, phone: '+1 555-0456', joinDate: '2023-02-01', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
+    { id: 'EMP105', name: "James O'Brien", department: 'Operations', designation: 'Foreman', baseSalary: 40000, phone: '+1 555-0567', joinDate: '2022-11-11', status: 'Active', siteId: 'SITE-103', messId: null },
+    { id: 'EMP106', name: 'Fatima Al-Sayed', department: 'Engineering', designation: 'Junior Engineer', baseSalary: 30000, phone: '+1 555-0678', joinDate: '2024-01-08', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
+    { id: 'EMP107', name: 'Robert Kim', department: 'Logistics', designation: 'Driver', baseSalary: 26000, phone: '+1 555-0789', joinDate: '2023-08-19', status: 'Active', siteId: 'SITE-104', messId: 'MESS-3' },
+    { id: 'EMP108', name: 'Elena Petrova', department: 'Quality Control', designation: 'Safety Officer', baseSalary: 36000, phone: '+1 555-0890', joinDate: '2023-06-30', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
+  ];
+}
+
+function seedMesses() {
+  return [
+    { id: 'MESS-1', name: 'North Block Mess', location: 'Near Downtown Commercial Hub', status: 'Active' },
+    { id: 'MESS-2', name: 'Riverside Canteen', location: 'Near Riverside Residential Tower', status: 'Active' },
+    { id: 'MESS-3', name: 'Central Workers Mess', location: 'Zone 7, Industrial Belt', status: 'Active' },
+  ];
+}
+
+function seedMessExpenses() {
+  const month = currentMonthStr();
+  return {
+    [month]: { 'MESS-1': 18000, 'MESS-2': 12000, 'MESS-3': 6000 },
+  };
+}
+
+function seedAdvances() {
+  return [
+    { id: uid('ADV'), employeeId: 'EMP101', amount: 5000, dateGiven: prevMonthStr(currentMonthStr()) + '-10', note: 'Family emergency' },
   ];
 }
 
@@ -159,8 +205,41 @@ function getMonthAttendanceStats(employeeId, monthStr, attendance) {
   return { presentDays, halfDays, absentDays, otUnits, loggedDays };
 }
 
-// Full payroll computation for one employee for one month, per spec formulas
-function calculateEmployeePayroll(employee, monthStr, attendance, settings) {
+// Number of currently-active employees enrolled in a given mess
+function getMessMemberCount(messId, employees) {
+  return employees.filter((e) => e.messId === messId && e.status === 'Active').length;
+}
+
+// Each mess member's equal share of that mess's total cost for the month
+function getMessPerHeadShare(messId, monthStr, messExpenses, employees) {
+  const totalCost = Number((messExpenses[monthStr] || {})[messId]) || 0;
+  const memberCount = getMessMemberCount(messId, employees);
+  return memberCount > 0 ? totalCost / memberCount : 0;
+}
+
+// Salary advances recovered in a payroll month: any advance disbursed during
+// the immediately preceding calendar month shows up as a deduction here.
+function getApplicableAdvances(employeeId, monthStr, advances) {
+  const recoveryMonth = prevMonthStr(monthStr);
+  return advances.filter((a) => a.employeeId === employeeId && a.dateGiven.slice(0, 7) === recoveryMonth);
+}
+
+function getAdvanceStatus(advance, referenceMonthStr) {
+  const recoveryMonth = nextMonthStr(advance.dateGiven.slice(0, 7));
+  if (recoveryMonth === referenceMonthStr) return 'due';
+  if (recoveryMonth < referenceMonthStr) return 'recovered';
+  return 'upcoming';
+}
+
+// Full payroll computation for one employee for one month, per spec formulas.
+// `extras` carries cross-entity context needed for mess-cost splitting and
+// advance recovery: { employees, messExpenses, advances }.
+function calculateEmployeePayroll(employee, monthStr, attendance, settings, extras) {
+  extras = extras || {};
+  const allEmployees = extras.employees || [employee];
+  const messExpenses = extras.messExpenses || {};
+  const advances = extras.advances || [];
+
   const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode);
   const dailyRate = workingDays > 0 ? employee.baseSalary / workingDays : 0;
   const stats = getMonthAttendanceStats(employee.id, monthStr, attendance);
@@ -172,7 +251,13 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings) {
   const otMultiplier = Number(settings.defaultOtMultiplier) || 1;
   const otEarnings = stats.otUnits * otMultiplier * dailyRate;
 
-  const netPayable = Math.max(0, employee.baseSalary - totalDeductions + otEarnings);
+  const messDeduction = employee.messId ? getMessPerHeadShare(employee.messId, monthStr, messExpenses, allEmployees) : 0;
+
+  const appliedAdvances = getApplicableAdvances(employee.id, monthStr, advances);
+  const advanceDeduction = appliedAdvances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
+  const grandTotalDeductions = totalDeductions + messDeduction + advanceDeduction;
+  const netPayable = Math.max(0, employee.baseSalary - grandTotalDeductions + otEarnings);
 
   return {
     workingDays,
@@ -183,6 +268,10 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings) {
     totalDeductions,
     otMultiplier,
     otEarnings,
+    messDeduction,
+    appliedAdvances,
+    advanceDeduction,
+    grandTotalDeductions,
     baseSalary: employee.baseSalary,
     netPayable,
   };

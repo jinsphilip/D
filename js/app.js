@@ -4,6 +4,8 @@ const NAV_ITEMS = [
   { key: 'sites', label: 'Sites', icon: 'map-pin' },
   { key: 'employees', label: 'Employees', icon: 'users' },
   { key: 'payroll', label: 'Payroll', icon: 'wallet' },
+  { key: 'mess', label: 'Mess', icon: 'utensils' },
+  { key: 'advances', label: 'Advances', icon: 'hand-coins' },
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -18,6 +20,9 @@ function App() {
   const [employees, setEmployees] = usePersistentState(STORAGE_KEYS.employees, seedEmployees);
   const [attendance, setAttendance] = usePersistentState(STORAGE_KEYS.attendance, seedAttendance);
   const [settings, setSettings] = usePersistentState(STORAGE_KEYS.settings, seedSettings);
+  const [messes, setMesses] = usePersistentState(STORAGE_KEYS.messes, seedMesses);
+  const [messExpenses, setMessExpenses] = usePersistentState(STORAGE_KEYS.messExpenses, seedMessExpenses);
+  const [advances, setAdvances] = usePersistentState(STORAGE_KEYS.advances, seedAdvances);
 
   const [tab, setTab] = React.useState('dashboard');
   const [siteFilter, setSiteFilter] = React.useState('all');
@@ -35,6 +40,7 @@ function App() {
     content = (
       <Dashboard
         sites={sites} employees={employees} attendance={attendance} settings={settings}
+        messExpenses={messExpenses} advances={advances}
         siteFilter={siteFilter} setSiteFilter={setSiteFilter} onNavigate={navigate}
       />
     );
@@ -51,14 +57,26 @@ function App() {
     );
   } else if (tab === 'employees') {
     content = (
-      <EmployeesModule employees={employees} setEmployees={setEmployees} sites={sites} settings={settings} showToast={showToast} />
+      <EmployeesModule employees={employees} setEmployees={setEmployees} sites={sites} messes={messes} settings={settings} showToast={showToast} />
     );
   } else if (tab === 'payroll') {
     content = (
       <PayrollModule
-        employees={employees} sites={sites} attendance={attendance} settings={settings}
+        employees={employees} sites={sites} messes={messes} messExpenses={messExpenses} advances={advances}
+        attendance={attendance} settings={settings}
         siteFilter={siteFilter} setSiteFilter={setSiteFilter}
       />
+    );
+  } else if (tab === 'mess') {
+    content = (
+      <MessModule
+        messes={messes} setMesses={setMesses} employees={employees} setEmployees={setEmployees}
+        messExpenses={messExpenses} setMessExpenses={setMessExpenses} settings={settings} showToast={showToast}
+      />
+    );
+  } else if (tab === 'advances') {
+    content = (
+      <AdvancesModule employees={employees} advances={advances} setAdvances={setAdvances} settings={settings} showToast={showToast} />
     );
   } else if (tab === 'settings') {
     content = <SettingsModule settings={settings} setSettings={setSettings} showToast={showToast} />;

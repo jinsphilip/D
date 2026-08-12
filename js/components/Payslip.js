@@ -1,4 +1,4 @@
-function PayslipModal({ employee, site, monthStr, settings, result, onClose }) {
+function PayslipModal({ employee, site, mess, monthStr, settings, result, onClose }) {
   const handlePrint = () => window.print();
 
   return (
@@ -40,6 +40,12 @@ function PayslipModal({ employee, site, monthStr, settings, result, onClose }) {
             <div className="text-slate-800 font-medium text-right">{employee.designation}</div>
             <div className="text-slate-400">Job Site</div>
             <div className="text-slate-800 font-medium text-right">{site ? site.name : 'Unassigned'}</div>
+            {mess && (
+              <React.Fragment>
+                <div className="text-slate-400">Mess</div>
+                <div className="text-slate-800 font-medium text-right">{mess.name}</div>
+              </React.Fragment>
+            )}
           </div>
 
           <div className="mb-6">
@@ -80,10 +86,29 @@ function PayslipModal({ employee, site, monthStr, settings, result, onClose }) {
                   <td className="py-2 text-slate-600">Absenteeism Deduction ({result.absentDays} day(s))</td>
                   <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.absentDeduction, settings.currency)}</td>
                 </tr>
-                <tr className="border-b border-slate-200">
+                <tr className={result.messDeduction > 0 || result.advanceDeduction > 0 ? 'border-b border-slate-100' : 'border-b border-slate-200'}>
                   <td className="py-2 text-slate-600">Half-Day Deduction ({result.halfDays} day(s))</td>
                   <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.halfDayDeduction, settings.currency)}</td>
                 </tr>
+                {result.messDeduction > 0 && (
+                  <tr className="border-b border-slate-100">
+                    <td className="py-2 text-slate-600">Mess Deduction{mess ? ` (${mess.name})` : ''}</td>
+                    <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.messDeduction, settings.currency)}</td>
+                  </tr>
+                )}
+                {result.advanceDeduction > 0 && (
+                  <tr className="border-b border-slate-200">
+                    <td className="py-2 text-slate-600 align-top">
+                      Salary Advance Recovery
+                      {result.appliedAdvances.length > 1 && (
+                        <div className="text-[11px] text-slate-400 mt-0.5">
+                          {result.appliedAdvances.map((a) => `${formatCurrency(a.amount, settings.currency)} (${a.dateGiven})`).join(', ')}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 text-right font-medium text-rose-600 align-top">− {formatCurrency(result.advanceDeduction, settings.currency)}</td>
+                  </tr>
+                )}
                 <tr>
                   <td className="pt-3 text-slate-900 font-bold text-base">Net Payable Salary</td>
                   <td className="pt-3 text-right font-extrabold text-base text-brand-700">{formatCurrency(result.netPayable, settings.currency)}</td>

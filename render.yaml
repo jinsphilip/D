@@ -3,14 +3,19 @@
 # during the Blueprint deploy (paste your Supabase connection string, see
 # DEPLOY.md), and you can update it any time under the service's
 # Environment settings without touching this file.
+#
+# Build/start commands explicitly `cd server` themselves rather than relying
+# on `rootDir` — on at least one account, Render ran these from the repo
+# root regardless of rootDir, which broke `npm start` (it looked for
+# package.json at the repo root instead of server/package.json). Explicit
+# `cd` works no matter which directory Render actually starts them in.
 services:
   - type: web
     name: nep-payroll-app
     runtime: node
     plan: free
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
     envVars:
       - key: DATABASE_URL
         sync: false

@@ -11,6 +11,14 @@
 // (e.g. Render) injects real environment variables directly.
 require('dotenv').config();
 
+// Supabase's pooler host resolves to both an IPv4 and an IPv6 address.
+// Node can default to trying IPv6 first, which fails with ENETUNREACH on
+// hosts (Render included) that have no outbound IPv6 route, even though a
+// working IPv4 address exists for the same hostname. Prefer IPv4 globally
+// so every DNS lookup in this process picks the address that's actually
+// reachable.
+require('dns').setDefaultResultOrder('ipv4first');
+
 const express = require('express');
 const path = require('path');
 const cors = require('cors');

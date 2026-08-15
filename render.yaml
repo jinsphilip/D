@@ -1,9 +1,8 @@
-databases:
-  - name: nep-payroll-db
-    plan: free
-    databaseName: nep_payroll
-    user: nep_app
-
+# Web service only — the database is Supabase (Postgres), not Render's own.
+# DATABASE_URL isn't set here since it's a secret: Render will prompt for it
+# during the Blueprint deploy (paste your Supabase connection string, see
+# DEPLOY.md), and you can update it any time under the service's
+# Environment settings without touching this file.
 services:
   - type: web
     name: nep-payroll-app
@@ -14,6 +13,4 @@ services:
     startCommand: npm start
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: nep-payroll-db
-          property: connectionString
+        sync: false

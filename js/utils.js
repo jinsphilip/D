@@ -146,23 +146,25 @@ function seedSettings() {
 }
 
 // ---------------------------------------------------------------------------
-// Persistence
+// Persistence — a small shared JSON store on the server (see server/), so
+// every browser reads and writes the same data instead of each browser
+// having its own isolated localStorage copy.
 // ---------------------------------------------------------------------------
 
-function loadState(key, seedFn) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn('Failed to parse localStorage key', key, e);
-  }
-  const seeded = seedFn();
-  try { localStorage.setItem(key, JSON.stringify(seeded)); } catch (e) {}
-  return seeded;
+async function apiGet(key) {
+  const res = await fetch(`/api/data/${key}`);
+  if (!res.ok) throw new Error(`Server returned ${res.status} while loading data`);
+  return res.json();
 }
 
-function saveState(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+async function apiPut(key, value) {
+  const res = await fetch(`/api/data/${key}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
+  });
+  if (!res.ok) throw new Error(`Server returned ${res.status} while saving data`);
+  return res.json();
 }
 
 // ---------------------------------------------------------------------------

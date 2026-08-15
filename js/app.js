@@ -9,20 +9,95 @@ const NAV_ITEMS = [
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
-function usePersistentState(key, seedFn) {
-  const [state, setState] = React.useState(() => loadState(key, seedFn));
-  React.useEffect(() => { saveState(key, state); }, [key, state]);
-  return [state, setState];
+// Polling interval for picking up changes another user made on a different
+// device/browser. This is not a live push (no websockets) — it's a simple
+// "check back every few seconds" refresh, which is enough for a small team
+// entering attendance/payroll data without stepping on each other constantly.
+const SYNC_POLL_MS = 6000;
+
+function useServerState(key, seedFn) {
+  const [state, setState] = React.useState(null); // null while loading
+  const [error, setError] = React.useState(null);
+  const savingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    apiGet(key)
+      .then(async (value) => {
+        if (cancelled) return;
+        if (value === null || value === undefined) {
+          const seeded = seedFn();
+          await apiPut(key, seeded).catch(() => {});
+          if (!cancelled) setState(seeded);
+        } else {
+          setState(value);
+        }
+      })
+      .catch((e) => { if (!cancelled) setError(e.message || 'Failed to load data'); });
+    return () => { cancelled = true; };
+  }, [key]);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      if (savingRef.current) return;
+      apiGet(key)
+        .then((value) => {
+          if (value === null || value === undefined) return;
+          setState((prev) => (JSON.stringify(prev) === JSON.stringify(value) ? prev : value));
+        })
+        .catch(() => {});
+    }, SYNC_POLL_MS);
+    return () => clearInterval(interval);
+  }, [key]);
+
+  const setAndSync = React.useCallback((updater) => {
+    setState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      savingRef.current = true;
+      apiPut(key, next)
+        .catch((e) => setError(e.message || 'Failed to save data'))
+        .finally(() => { savingRef.current = false; });
+      return next;
+    });
+  }, [key]);
+
+  return [state, setAndSync, error];
+}
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center">
+        <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin mx-auto mb-3"></div>
+        <p className="text-sm text-slate-500">Connecting to server…</p>
+      </div>
+    </div>
+  );
+}
+
+function ServerErrorScreen({ message }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="max-w-sm text-center">
+        <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
+          <Icon name="server-crash" className="w-6 h-6" />
+        </div>
+        <p className="font-semibold text-slate-800">Can't reach the server</p>
+        <p className="text-sm text-slate-500 mt-1">{message}</p>
+        <Button className="mt-4" onClick={() => window.location.reload()}>Retry</Button>
+      </div>
+    </div>
+  );
 }
 
 function App() {
-  const [sites, setSites] = usePersistentState(STORAGE_KEYS.sites, seedSites);
-  const [employees, setEmployees] = usePersistentState(STORAGE_KEYS.employees, seedEmployees);
-  const [attendance, setAttendance] = usePersistentState(STORAGE_KEYS.attendance, seedAttendance);
-  const [settings, setSettings] = usePersistentState(STORAGE_KEYS.settings, seedSettings);
-  const [messes, setMesses] = usePersistentState(STORAGE_KEYS.messes, seedMesses);
-  const [messExpenses, setMessExpenses] = usePersistentState(STORAGE_KEYS.messExpenses, seedMessExpenses);
-  const [advances, setAdvances] = usePersistentState(STORAGE_KEYS.advances, seedAdvances);
+  const [sites, setSites, sitesErr] = useServerState(STORAGE_KEYS.sites, seedSites);
+  const [employees, setEmployees, employeesErr] = useServerState(STORAGE_KEYS.employees, seedEmployees);
+  const [attendance, setAttendance, attendanceErr] = useServerState(STORAGE_KEYS.attendance, seedAttendance);
+  const [settings, setSettings, settingsErr] = useServerState(STORAGE_KEYS.settings, seedSettings);
+  const [messes, setMesses, messesErr] = useServerState(STORAGE_KEYS.messes, seedMesses);
+  const [messExpenses, setMessExpenses, messExpensesErr] = useServerState(STORAGE_KEYS.messExpenses, seedMessExpenses);
+  const [advances, setAdvances, advancesErr] = useServerState(STORAGE_KEYS.advances, seedAdvances);
 
   const [tab, setTab] = React.useState('dashboard');
   const [siteFilter, setSiteFilter] = React.useState('all');
@@ -34,6 +109,12 @@ function App() {
   });
 
   const navigate = (key) => { setTab(key); setMobileNavOpen(false); };
+
+  const firstError = sitesErr || employeesErr || attendanceErr || settingsErr || messesErr || messExpensesErr || advancesErr;
+  if (firstError) return <ServerErrorScreen message={firstError} />;
+
+  const stillLoading = [sites, employees, attendance, settings, messes, messExpenses, advances].some((v) => v === null);
+  if (stillLoading) return <LoadingScreen />;
 
   let content = null;
   if (tab === 'dashboard') {
@@ -107,8 +188,8 @@ function App() {
             </button>
           ))}
         </nav>
-        <div className="px-5 py-4 border-t border-slate-100 text-[11px] text-slate-400">
-          Data stored locally in this browser.
+        <div className="px-5 py-4 border-t border-slate-100 text-[11px] text-slate-400 flex items-center gap-1.5">
+          <Icon name="refresh-cw" className="w-3 h-3" /> Synced with server · shared by all users
         </div>
       </aside>
 

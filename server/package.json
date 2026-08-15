@@ -1,0 +1,14 @@
+{
+  "name": "nikhila-engineering-payroll-server",
+  "version": "1.0.0",
+  "description": "Shared data server for the Nikhila Engineering Attendance & Payroll app",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "pg": "^8.12.0"
+  }
+}

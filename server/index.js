@@ -6,6 +6,11 @@
 // browser having its own isolated localStorage copy. See DEPLOY.md for
 // hosting this on Render with a managed Postgres database.
 
+// Load DATABASE_URL (and any other config) from a local .env file if one
+// exists — see .env.example. Harmless no-op in production, where the host
+// (e.g. Render) injects real environment variables directly.
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 const cors = require('cors');

@@ -49,12 +49,44 @@ they're on.
 
 ## Local development
 
-Requires Node.js and a PostgreSQL instance (local or remote).
+Requires Node.js and a PostgreSQL instance (local, or a remote one like
+Supabase — anything that gives you a connection string works).
 
 ```bash
 cd server
 npm install
-DATABASE_URL="postgresql://user:password@localhost:5432/nep_payroll" npm start
+cp .env.example .env
+```
+
+Edit `.env` and paste your real connection string as `DATABASE_URL=...`,
+then:
+
+```bash
+npm start
+```
+
+Using a `.env` file (rather than setting the environment variable inline on
+the command line) is deliberate: `VAR=value command` only works in
+bash/zsh — it's not valid syntax in Windows `cmd.exe` or PowerShell, and
+was a common source of confusion when this was the only documented option.
+A `.env` file works identically on every OS. `.env` is gitignored, so your
+credentials never get committed — only commit `.env.example`.
+
+If you'd rather not use a file, the inline forms still work, per shell:
+
+```bash
+# bash / zsh (macOS, Linux)
+DATABASE_URL="postgresql://user:password@host:5432/dbname" npm start
+```
+```cmd
+:: Windows cmd.exe
+set DATABASE_URL=postgresql://user:password@host:5432/dbname
+npm start
+```
+```powershell
+# Windows PowerShell
+$env:DATABASE_URL="postgresql://user:password@host:5432/dbname"
+npm start
 ```
 
 Then open `http://localhost:3000` — the Express server serves the frontend

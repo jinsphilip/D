@@ -111,6 +111,8 @@ app.put('/api/data/:key', auth.requireAuth, async (req, res) => {
 app.get('/', (req, res) => res.sendFile(path.join(ROOT_DIR, 'index.html')));
 app.use('/css', express.static(path.join(ROOT_DIR, 'css')));
 app.use('/js', express.static(path.join(ROOT_DIR, 'js')));
+app.use('/icons', express.static(path.join(ROOT_DIR, 'icons')));
+app.get('/manifest.json', (req, res) => res.sendFile(path.join(ROOT_DIR, 'manifest.json')));
 
 db.initDb()
   .then(() => auth.ensureAdminSeeded())

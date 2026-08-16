@@ -1,73 +1,72 @@
-// PostgreSQL-backed key/value store. The frontend already treats each
+// MongoDB-backed key/value store. The frontend already treats each
 // top-level piece of app state (sites, employees, attendance, ...) as one
-// opaque JSON blob, so rather than modeling a full relational schema we keep
-// that shape server-side too: one row per key, a JSONB column for the value.
-// This keeps the REST contract (GET/PUT /api/data/:key) identical to the
-// earlier flat-file version while giving real concurrent-write safety and
-// durability independent of the web service's filesystem.
+// opaque JSON blob, so rather than modeling separate collections we keep
+// that shape server-side too: one document per key in a single `store`
+// collection, `{ _id: key, value: <anything>, updatedAt }`. This keeps the
+// REST contract (GET/PUT /api/data/:key) identical to the earlier
+// Postgres/file-based versions — only this file changed.
 
-const { Pool } = require('pg');
+const { MongoClient } = require('mongodb');
 const seedStore = require('./seedData');
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.error('DATABASE_URL is not set. Set it to a PostgreSQL connection string (see DEPLOY.md).');
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+  console.error('MONGODB_URI is not set. Set it to a MongoDB connection string (see DEPLOY.md).');
   process.exit(1);
 }
 
-// Render (and most managed Postgres providers) terminate SSL with a
-// certificate that isn't in Node's default trust store; a local dev
-// Postgres on localhost has no SSL listener at all. Toggle accordingly.
-const useSsl = !/localhost|127\.0\.0\.1/.test(connectionString);
+// Fixed database name regardless of what (if anything) is in the URI's own
+// path — Atlas connection strings often omit it, which would otherwise
+// default to a generic "test" database.
+const DB_NAME = 'nep_payroll';
+const COLLECTION = 'store';
 
-const pool = new Pool({
-  connectionString,
-  ssl: useSsl ? { rejectUnauthorized: false } : false,
-});
+const client = new MongoClient(uri);
+let collectionPromise = null;
+
+function getCollection() {
+  if (!collectionPromise) {
+    collectionPromise = client.connect().then(() => client.db(DB_NAME).collection(COLLECTION));
+  }
+  return collectionPromise;
+}
 
 async function initDb() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS store (
-      key TEXT PRIMARY KEY,
-      value JSONB NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-  `);
-
-  const { rows } = await pool.query('SELECT key FROM store');
-  const existingKeys = new Set(rows.map((r) => r.key));
+  const store = await getCollection();
+  const existing = await store.find({}, { projection: { _id: 1 } }).toArray();
+  const existingKeys = new Set(existing.map((doc) => doc._id));
   const defaults = seedStore();
   const missing = Object.keys(defaults).filter((k) => !existingKeys.has(k));
 
   if (missing.length > 0) {
-    for (const key of missing) {
-      await pool.query(
-        'INSERT INTO store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING',
-        [key, JSON.stringify(defaults[key])]
-      );
-    }
+    await store.insertMany(
+      missing.map((key) => ({ _id: key, value: defaults[key], updatedAt: new Date() }))
+    );
     console.log('Seeded default data for keys:', missing.join(', '));
   }
 }
 
 async function getAll() {
-  const { rows } = await pool.query('SELECT key, value FROM store');
+  const store = await getCollection();
+  const docs = await store.find({}).toArray();
   const result = {};
-  rows.forEach((r) => { result[r.key] = r.value; });
+  docs.forEach((doc) => { result[doc._id] = doc.value; });
   return result;
 }
 
 async function getValue(key) {
-  const { rows } = await pool.query('SELECT value FROM store WHERE key = $1', [key]);
-  return rows.length > 0 ? rows[0].value : null;
+  const store = await getCollection();
+  const doc = await store.findOne({ _id: key });
+  return doc ? doc.value : null;
 }
 
 async function setValue(key, value) {
-  await pool.query(
-    `INSERT INTO store (key, value, updated_at) VALUES ($1, $2, now())
-     ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()`,
-    [key, JSON.stringify(value)]
+  const store = await getCollection();
+  await store.updateOne(
+    { _id: key },
+    { $set: { value, updatedAt: new Date() } },
+    { upsert: true }
   );
 }
 
-module.exports = { pool, initDb, getAll, getValue, setValue };
+module.exports = { initDb, getAll, getValue, setValue };

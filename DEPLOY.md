@@ -5,65 +5,76 @@
 The app used to store everything in the browser's `localStorage` — fine for
 one person, useless for a team, since every browser had its own isolated
 copy. It now talks to a small Node/Express server (`server/`) backed by
-PostgreSQL. All data (sites, employees, attendance, mess, advances,
-settings) lives in one shared database; every browser that opens the app
-reads and writes the same records. Changes made by one person show up for
-everyone else within a few seconds (the frontend polls the server every 6s —
-see "How syncing works" below).
+MongoDB. All data (sites, employees, attendance, mess, advances, settings)
+lives in one shared database; every browser that opens the app reads and
+writes the same records. Changes made by one person show up for everyone
+else within a few seconds (the frontend polls the server every 6s — see
+"How syncing works" below).
 
-## Deploy to Render + Supabase
+## Deploy to Render + MongoDB Atlas
 
 This app runs on two pieces: **Render** hosts the Node/Express web service,
-**Supabase** hosts the Postgres database. They're independent — the web
-service just needs a `DATABASE_URL` pointing at Supabase.
+**MongoDB Atlas** hosts the database. They're independent — the web service
+just needs a `MONGODB_URI` pointing at Atlas.
 
-### 1. Get your Supabase connection string
+### 1. Create a free Atlas cluster (skip if you already have one)
 
-1. In your Supabase project → gear icon **Project Settings** → **Database**.
-2. Under **Connection string**, open the **URI** tab and copy the
-   **Transaction pooler** string (port `6543`), not the direct connection
-   (port `5432`). The pooler works from anywhere (Render included); the
-   direct connection is IPv6-only on Supabase's free tier and most hosts,
-   Render included, can't reach it.
-3. It looks like
-   `postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres` —
-   fill in your actual password.
+1. [MongoDB Atlas](https://www.mongodb.com/cloud/atlas/register) → create an
+   account → create a new project → **Build a Database** → pick the free
+   **M0** tier → choose any region → create.
+2. When prompted for a database user, set a username and password (letters
+   and digits only — avoids any URL-encoding issues later). Save it
+   somewhere.
+3. **Network Access** (left sidebar) → **Add IP Address** → **Allow Access
+   From Anywhere** (`0.0.0.0/0`). This step is easy to miss and the server
+   simply can't connect without it — Render's free plan doesn't have a
+   fixed outbound IP to allowlist individually.
 
-### 2. Deploy the web service to Render
+### 2. Get your connection string
+
+**Database** (left sidebar) → **Connect** on your cluster → **Drivers** →
+copy the connection string shown. It looks like:
+```
+mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
+```
+Replace `<password>` with the real password from step 1. You don't need to
+add a database name into this string — the server always uses a fixed
+database (`nep_payroll`) regardless of what's here.
+
+### 3. Deploy the web service to Render
 
 Using the included `render.yaml` Blueprint:
 
 1. Go to the [Render Dashboard](https://dashboard.render.com) → **New +** →
    **Blueprint** → connect this repository.
 2. Render reads `render.yaml` and shows the `nep-payroll-app` web service
-   it's about to create. Since `DATABASE_URL` is a secret, Render will
-   prompt you for it right there in the deploy flow — paste the Supabase
-   connection string from step 1. Click **Apply**.
+   it's about to create. Since `MONGODB_URI` is a secret, Render will
+   prompt you for it right there in the deploy flow — paste the Atlas
+   connection string from step 2. Click **Apply**.
 3. Once it finishes building and boots, open the URL Render gives you
    (something like `https://nep-payroll-app.onrender.com`). The server
-   creates its `store` table and seeds the demo dataset into Supabase on
-   first boot — check Supabase's **Table Editor** afterward and you'll see
-   it there.
+   creates its `store` collection and seeds the demo dataset into Atlas on
+   first boot — check Atlas's **Browse Collections** afterward and you'll
+   see `nep_payroll.store` there.
 
 Share that URL with everyone who needs to use the app — they're all now
-reading and writing the same Supabase database, no matter which device or
+reading and writing the same Atlas database, no matter which device or
 browser they're on.
 
-Forgot to paste `DATABASE_URL` during setup, or need to change it later?
+Forgot to paste `MONGODB_URI` during setup, or need to change it later?
 Render Dashboard → the `nep-payroll-app` service → **Environment** tab.
 
 ### If you'd rather not use the Blueprint
 
 **New +** → **Web Service** → connect this repo:
-- Root Directory: `server`
-- Build Command: `npm install`
-- Start Command: `npm start`
-- Environment → add `DATABASE_URL` = your Supabase connection string.
+- Build Command: `cd server && npm install`
+- Start Command: `cd server && npm start`
+- Environment → add `MONGODB_URI` = your Atlas connection string.
 
 ## Local development
 
-Requires Node.js and a PostgreSQL instance (local, or a remote one like
-Supabase — anything that gives you a connection string works).
+Requires Node.js and a MongoDB connection string (Atlas, per above, works
+fine for local dev too — no need for a separate local database).
 
 ```bash
 cd server
@@ -71,7 +82,7 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and paste your real connection string as `DATABASE_URL=...`,
+Edit `.env` and paste your real connection string as `MONGODB_URI=...`,
 then:
 
 ```bash
@@ -89,16 +100,16 @@ If you'd rather not use a file, the inline forms still work, per shell:
 
 ```bash
 # bash / zsh (macOS, Linux)
-DATABASE_URL="postgresql://user:password@host:5432/dbname" npm start
+MONGODB_URI="mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority" npm start
 ```
 ```cmd
 :: Windows cmd.exe
-set DATABASE_URL=postgresql://user:password@host:5432/dbname
+set MONGODB_URI=mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority
 npm start
 ```
 ```powershell
 # Windows PowerShell
-$env:DATABASE_URL="postgresql://user:password@host:5432/dbname"
+$env:MONGODB_URI="mongodb+srv://user:password@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority"
 npm start
 ```
 
@@ -127,11 +138,10 @@ server; everything is served from the one Node process so the frontend's
   either keep the URL unlisted, put it behind your own auth layer (a
   reverse proxy with basic auth, a VPN, Render's IP allowlist on paid
   plans), or ask to have a simple login added.
-- **Supabase's free project pauses after 7 days with no database
-  activity.** Data isn't lost, but someone has to open the Supabase
-  dashboard and click "Restore" before the app works again. If the app
-  gets used at least weekly this never comes up; if it might sit idle
-  longer than that, upgrade to Supabase's Pro plan to remove the pause.
+- **MongoDB Atlas's free M0 tier does not auto-pause from inactivity** —
+  unlike some other free-tier databases, it's just always on. The one real
+  limit is storage (512MB), which is far more than this app will ever use
+  for a small team's records.
 - **Render's free web service spins down when idle** and takes ~30–50
   seconds to "wake up" on the next request after ~15 minutes of no
   traffic. Upgrade the web service plan (~$7/mo) if that cold-start delay

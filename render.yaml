@@ -1,6 +1,6 @@
-# Web service only — the database is Supabase (Postgres), not Render's own.
-# DATABASE_URL isn't set here since it's a secret: Render will prompt for it
-# during the Blueprint deploy (paste your Supabase connection string, see
+# Web service only — the database is MongoDB Atlas, not Render's own.
+# MONGODB_URI isn't set here since it's a secret: Render will prompt for it
+# during the Blueprint deploy (paste your Atlas connection string, see
 # DEPLOY.md), and you can update it any time under the service's
 # Environment settings without touching this file.
 #
@@ -17,5 +17,5 @@ services:
     buildCommand: cd server && npm install
     startCommand: cd server && npm start
     envVars:
-      - key: DATABASE_URL
+      - key: MONGODB_URI
         sync: false

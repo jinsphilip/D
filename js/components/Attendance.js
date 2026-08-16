@@ -46,8 +46,26 @@ function StatusSelector({ value, onChange }) {
   );
 }
 
+const BLANK_RECORD = { status: undefined, otCount: 0, note: '' };
+
 function AttendanceModule({ employees, sites, attendance, setAttendance, settings, siteFilter, setSiteFilter, showToast }) {
   const [date, setDate] = React.useState(todayISO());
+  // Edits happen against this local draft first; nothing reaches the shared
+  // backend until "Save Attendance" is clicked, so a whole date's worth of
+  // taps/edits becomes one deliberate save instead of one network write per
+  // click.
+  const [draft, setDraft] = React.useState(() => attendance[date] || {});
+  const [dirty, setDirty] = React.useState(false);
+
+  React.useEffect(() => {
+    setDraft(attendance[date] || {});
+    setDirty(false);
+    // Intentionally only re-syncs when the selected date changes, not on
+    // every `attendance` update (e.g. a background poll picking up someone
+    // else's edits elsewhere) — that would silently wipe out in-progress
+    // local edits on the date currently being worked on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
 
   const monthStr = date.slice(0, 7);
   const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode);
@@ -60,27 +78,55 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
 
   const siteName = (id) => (sites.find((s) => s.id === id) || {}).name || 'Unassigned';
 
-  const getRecord = (empId) => (attendance[date] && attendance[date][empId]) || { status: undefined, otCount: 0, note: '' };
+  const getRecord = (empId) => draft[empId] || BLANK_RECORD;
+
+  const changeDate = (nextDate) => {
+    if (dirty && !window.confirm('You have unsaved attendance changes for this date. Switch dates and discard them?')) {
+      return;
+    }
+    setDate(nextDate);
+  };
 
   const updateRecord = (empId, patch) => {
-    setAttendance((prev) => {
-      const dayRecords = { ...(prev[date] || {}) };
-      const current = dayRecords[empId] || { status: undefined, otCount: 0, note: '' };
-      dayRecords[empId] = { ...current, ...patch };
-      return { ...prev, [date]: dayRecords };
+    setDraft((prev) => {
+      const current = prev[empId] || BLANK_RECORD;
+      const next = { ...current, ...patch };
+      if (next.status === 'absent') next.otCount = 0; // no OT on a day not worked
+      return { ...prev, [empId]: next };
     });
+    setDirty(true);
   };
 
   const markAllPresent = () => {
-    setAttendance((prev) => {
-      const dayRecords = { ...(prev[date] || {}) };
+    setDraft((prev) => {
+      const next = { ...prev };
       filteredEmployees.forEach((emp) => {
-        const current = dayRecords[emp.id] || { status: undefined, otCount: 0, note: '' };
-        dayRecords[emp.id] = { ...current, status: 'present' };
+        const current = next[emp.id] || BLANK_RECORD;
+        next[emp.id] = { ...current, status: 'present' };
       });
-      return { ...prev, [date]: dayRecords };
+      return next;
     });
-    showToast(`Marked ${filteredEmployees.length} employee(s) present`);
+    setDirty(true);
+    showToast(`Marked ${filteredEmployees.length} employee(s) present (not yet saved)`);
+  };
+
+  const markAllAbsent = () => {
+    setDraft((prev) => {
+      const next = { ...prev };
+      filteredEmployees.forEach((emp) => {
+        const current = next[emp.id] || BLANK_RECORD;
+        next[emp.id] = { ...current, status: 'absent', otCount: 0 };
+      });
+      return next;
+    });
+    setDirty(true);
+    showToast(`Marked ${filteredEmployees.length} employee(s) absent (not yet saved)`);
+  };
+
+  const saveAttendance = () => {
+    setAttendance((prev) => ({ ...prev, [date]: draft }));
+    setDirty(false);
+    showToast('Attendance saved');
   };
 
   const otPreview = (emp, otCount) => {
@@ -93,7 +139,10 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Daily Attendance</h2>
-          <p className="text-sm text-slate-500">{dateLabel(date)}</p>
+          <p className="text-sm text-slate-500 flex items-center gap-2">
+            {dateLabel(date)}
+            {dirty && <Badge tone="amber">Unsaved changes</Badge>}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -101,14 +150,20 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
             className={inputClass + ' w-auto'}
             value={date}
             max={todayISO()}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => changeDate(e.target.value)}
           />
           <select className={selectClass + ' w-auto min-w-[160px]'} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
             <option value="all">All Sites</option>
             {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <Button onClick={markAllPresent} disabled={filteredEmployees.length === 0}>
+          <Button variant="secondary" onClick={markAllPresent} disabled={filteredEmployees.length === 0}>
             <Icon name="check-check" className="w-4 h-4" /> Mark Filtered Present
+          </Button>
+          <Button variant="secondary" onClick={markAllAbsent} disabled={filteredEmployees.length === 0}>
+            <Icon name="x" className="w-4 h-4" /> Mark Filtered Absent
+          </Button>
+          <Button onClick={saveAttendance} disabled={!dirty}>
+            <Icon name="save" className="w-4 h-4" /> Save Attendance
           </Button>
         </div>
       </div>

@@ -33,25 +33,65 @@ function MessForm({ mess, onSave, onClose }) {
   );
 }
 
+function MessMemberFeeRow({ employee, fee, currency, onChange }) {
+  return (
+    <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
+      <td className="px-4 py-2.5">
+        <div className="font-medium text-slate-800 text-sm">{employee.name}</div>
+        <div className="text-xs text-slate-400">{employee.id} · {employee.designation}</div>
+      </td>
+      <td className="px-4 py-2.5 text-right">
+        <div className="relative inline-block">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">{currency}</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className={inputClass + ' pl-6 w-32 text-right'}
+            placeholder="0.00"
+            value={fee || ''}
+            onChange={(e) => onChange(e.target.value)}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function MessModule({ messes, setMesses, employees, setEmployees, messExpenses, setMessExpenses, settings, showToast }) {
   const [formMess, setFormMess] = React.useState(null);
   const [assignMess, setAssignMess] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
-  const [expanded, setExpanded] = React.useState(null);
   const [month, setMonth] = React.useState(currentMonthStr());
+  const [splitInputs, setSplitInputs] = React.useState({}); // messId -> quick-split draft total
 
-  const membersOf = (messId) => employees.filter((e) => e.messId === messId);
   const activeMembersOf = (messId) => employees.filter((e) => e.messId === messId && e.status === 'Active');
 
-  const expenseFor = (messId) => (messExpenses[month] || {})[messId] || '';
-
-  const setExpense = (messId, value) => {
+  const setFee = (messId, empId, value) => {
     setMessExpenses((prev) => {
       const monthEntry = { ...(prev[month] || {}) };
-      if (value === '' || value === null) delete monthEntry[messId];
-      else monthEntry[messId] = Number(value);
+      const messEntry = { ...(monthEntry[messId] || {}) };
+      if (value === '' || value === null) delete messEntry[empId];
+      else messEntry[empId] = Number(value);
+      monthEntry[messId] = messEntry;
       return { ...prev, [month]: monthEntry };
     });
+  };
+
+  const applyEqualSplit = (messId) => {
+    const total = Number(splitInputs[messId]);
+    const members = activeMembersOf(messId);
+    if (!total || total <= 0 || members.length === 0) return;
+    const share = Math.round((total / members.length) * 100) / 100;
+    setMessExpenses((prev) => {
+      const monthEntry = { ...(prev[month] || {}) };
+      const messEntry = { ...(monthEntry[messId] || {}) };
+      members.forEach((m) => { messEntry[m.id] = share; });
+      monthEntry[messId] = messEntry;
+      return { ...prev, [month]: monthEntry };
+    });
+    showToast(`Split ${formatCurrency(total, settings.currency)} equally among ${members.length} member(s)`);
+    setSplitInputs((prev) => ({ ...prev, [messId]: '' }));
   };
 
   const saveMess = (form) => {
@@ -83,7 +123,7 @@ function MessModule({ messes, setMesses, employees, setEmployees, messExpenses, 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Mess Facilities</h2>
-          <p className="text-sm text-slate-500">{messes.length} mess(es) · costs split equally among active members each month</p>
+          <p className="text-sm text-slate-500">{messes.length} mess(es) · set each member's fee individually every month</p>
         </div>
         <div className="flex items-center gap-2">
           <input type="month" className={inputClass + ' w-auto'} value={month} onChange={(e) => setMonth(e.target.value)} />
@@ -96,88 +136,86 @@ function MessModule({ messes, setMesses, employees, setEmployees, messExpenses, 
       {messes.length === 0 ? (
         <EmptyState icon="utensils" title="No mess facilities yet" message="Create a mess to start tracking shared food costs." />
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-4">
           {messes.map((mess) => {
-            const members = membersOf(mess.id);
-            const activeMembers = activeMembersOf(mess.id);
-            const isOpen = expanded === mess.id;
-            const expense = expenseFor(mess.id);
-            const perHead = activeMembers.length > 0 ? (Number(expense) || 0) / activeMembers.length : 0;
+            const members = activeMembersOf(mess.id);
+            const total = getMessMonthTotal(mess.id, month, messExpenses);
             return (
-              <div key={mess.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-4 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-slate-900 truncate">{mess.name}</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">{mess.id}</p>
+              <div key={mess.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-100">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold text-slate-900">{mess.name}</h3>
+                      <Badge tone={mess.status === 'Active' ? 'green' : 'slate'}>{mess.status}</Badge>
                     </div>
-                    <Badge tone={mess.status === 'Active' ? 'green' : 'slate'}>{mess.status}</Badge>
-                  </div>
-                  {mess.location && (
-                    <p className="text-sm text-slate-500 mt-2 flex items-center gap-1.5">
-                      <Icon name="map-pin" className="w-3.5 h-3.5 shrink-0" /> {mess.location}
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {mess.id}{mess.location ? ` · ${mess.location}` : ''}
                     </p>
-                  )}
-                  <button
-                    className="text-sm text-slate-600 mt-3 flex items-center gap-1.5 hover:text-brand-600"
-                    onClick={() => setExpanded(isOpen ? null : mess.id)}
-                  >
-                    <Icon name="users" className="w-3.5 h-3.5" />
-                    {members.length} member(s)
-                    <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} className="w-3.5 h-3.5" />
-                  </button>
-                  {isOpen && (
-                    <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border-t border-slate-100 pt-2">
-                      {members.length === 0 ? (
-                        <p className="text-xs text-slate-400">No employees enrolled.</p>
-                      ) : members.map((e) => (
-                        <div key={e.id} className="text-xs text-slate-600 flex items-center justify-between">
-                          <span className="truncate">{e.name}</span>
-                          <span className="text-slate-400 shrink-0 ml-2">{e.status}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="ghost" className="!px-2.5" onClick={() => setAssignMess(mess)}>
+                      <Icon name="user-plus" className="w-4 h-4" /> Members
+                    </Button>
+                    <Button variant="ghost" className="!px-2.5" onClick={() => setFormMess(mess)}>
+                      <Icon name="pencil" className="w-4 h-4" /> Edit
+                    </Button>
+                    <Button variant="ghost" className="!px-2.5 text-rose-500 hover:bg-rose-50" onClick={() => setDeleteTarget(mess)}>
+                      <Icon name="trash-2" className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
 
-                  <div className="mt-3 pt-3 border-t border-slate-100">
-                    <Field label={`Total Expense · ${monthLabel(month)}`}>
+                <div className="px-4 py-3 bg-slate-50/60 border-b border-slate-100 flex flex-wrap items-end justify-between gap-3">
+                  <Field label={`Quick Split · ${monthLabel(month)}`} hint="Fills every member's fee below with an equal share">
+                    <div className="flex gap-2">
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">{settings.currency}</span>
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          className={inputClass + ' pl-7'}
-                          placeholder="0.00"
-                          value={expense}
-                          onChange={(e) => setExpense(mess.id, e.target.value)}
+                          className={inputClass + ' pl-7 w-40'}
+                          placeholder="Total amount"
+                          value={splitInputs[mess.id] || ''}
+                          onChange={(e) => setSplitInputs((prev) => ({ ...prev, [mess.id]: e.target.value }))}
                         />
                       </div>
-                    </Field>
-                    {Number(expense) > 0 && (
-                      <p className="text-xs text-slate-500 mt-1.5">
-                        {activeMembers.length > 0 ? (
-                          <React.Fragment>
-                            <span className="font-semibold text-brand-700">{formatCurrency(perHead, settings.currency)}</span> / active member ({activeMembers.length})
-                          </React.Fragment>
-                        ) : (
-                          <span className="text-amber-600">No active members — cost won't be distributed yet.</span>
-                        )}
-                      </p>
-                    )}
+                      <Button variant="secondary" onClick={() => applyEqualSplit(mess.id)} disabled={members.length === 0}>
+                        Apply
+                      </Button>
+                    </div>
+                  </Field>
+                  <div className="text-sm text-right">
+                    <p className="text-slate-400">Total this month</p>
+                    <p className="font-semibold text-brand-700">{formatCurrency(total, settings.currency)}</p>
                   </div>
                 </div>
-                <div className="border-t border-slate-100 px-3 py-2 flex items-center gap-1 bg-slate-50/60">
-                  <Button variant="ghost" className="!px-2.5" onClick={() => setAssignMess(mess)}>
-                    <Icon name="user-plus" className="w-4 h-4" /> Members
-                  </Button>
-                  <Button variant="ghost" className="!px-2.5" onClick={() => setFormMess(mess)}>
-                    <Icon name="pencil" className="w-4 h-4" /> Edit
-                  </Button>
-                  <Button variant="ghost" className="!px-2.5 ml-auto text-rose-500 hover:bg-rose-50" onClick={() => setDeleteTarget(mess)}>
-                    <Icon name="trash-2" className="w-4 h-4" />
-                  </Button>
-                </div>
+
+                {members.length === 0 ? (
+                  <EmptyState icon="users" title="No active members" message="Use the Members button to enroll employees in this mess." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50/60">
+                          <th className="px-4 py-2 font-medium">Employee</th>
+                          <th className="px-4 py-2 font-medium text-right">Mess Fee</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.map((emp) => (
+                          <MessMemberFeeRow
+                            key={emp.id}
+                            employee={emp}
+                            fee={getEmployeeMessFee(emp.id, mess.id, month, messExpenses)}
+                            currency={settings.currency}
+                            onChange={(v) => setFee(mess.id, emp.id, v)}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -111,7 +111,11 @@ function seedMesses() {
 function seedMessExpenses() {
   const month = currentMonthStr();
   return {
-    [month]: { 'MESS-1': 18000, 'MESS-2': 12000, 'MESS-3': 6000 },
+    [month]: {
+      'MESS-1': { EMP101: 6000, EMP102: 6000, EMP106: 6000 },
+      'MESS-2': { EMP103: 4000, EMP104: 4000, EMP108: 4000 },
+      'MESS-3': { EMP107: 6000 },
+    },
   };
 }
 
@@ -270,11 +274,19 @@ function getMessMemberCount(messId, employees) {
   return employees.filter((e) => e.messId === messId && e.status === 'Active').length;
 }
 
-// Each mess member's equal share of that mess's total cost for the month
-function getMessPerHeadShare(messId, monthStr, messExpenses, employees) {
-  const totalCost = Number((messExpenses[monthStr] || {})[messId]) || 0;
-  const memberCount = getMessMemberCount(messId, employees);
-  return memberCount > 0 ? totalCost / memberCount : 0;
+// Mess fees are set per employee, not split equally: messExpenses[month][messId]
+// is a map of { employeeId: fee }. This looks up one employee's fee for a
+// given mess and month.
+function getEmployeeMessFee(employeeId, messId, monthStr, messExpenses) {
+  const messEntry = (messExpenses[monthStr] || {})[messId] || {};
+  return Number(messEntry[employeeId]) || 0;
+}
+
+// Sum of every member's fee for a mess in a given month — used for display
+// (e.g. "Total This Month") rather than for splitting anything.
+function getMessMonthTotal(messId, monthStr, messExpenses) {
+  const messEntry = (messExpenses[monthStr] || {})[messId] || {};
+  return Object.values(messEntry).reduce((sum, fee) => sum + (Number(fee) || 0), 0);
 }
 
 // Salary advances recovered in a payroll month: any advance disbursed during
@@ -292,11 +304,10 @@ function getAdvanceStatus(advance, referenceMonthStr) {
 }
 
 // Full payroll computation for one employee for one month, per spec formulas.
-// `extras` carries cross-entity context needed for mess-cost splitting and
-// advance recovery: { employees, messExpenses, advances }.
+// `extras` carries cross-entity context needed for mess fees and advance
+// recovery: { employees, messExpenses, advances }.
 function calculateEmployeePayroll(employee, monthStr, attendance, settings, extras) {
   extras = extras || {};
-  const allEmployees = extras.employees || [employee];
   const messExpenses = extras.messExpenses || {};
   const advances = extras.advances || [];
 
@@ -312,7 +323,7 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   // day's pay earned for that day's overtime — no separate multiplier.
   const otEarnings = stats.otUnits * dailyRate;
 
-  const messDeduction = employee.messId ? getMessPerHeadShare(employee.messId, monthStr, messExpenses, allEmployees) : 0;
+  const messDeduction = employee.messId ? getEmployeeMessFee(employee.id, employee.messId, monthStr, messExpenses) : 0;
 
   const appliedAdvances = getApplicableAdvances(employee.id, monthStr, advances);
   const advanceDeduction = appliedAdvances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);

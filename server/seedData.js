@@ -58,7 +58,11 @@ function seedMesses() {
 function seedMessExpenses() {
   const month = currentMonthStr();
   return {
-    [month]: { 'MESS-1': 18000, 'MESS-2': 12000, 'MESS-3': 6000 },
+    [month]: {
+      'MESS-1': { EMP101: 6000, EMP102: 6000, EMP106: 6000 },
+      'MESS-2': { EMP103: 4000, EMP104: 4000, EMP108: 4000 },
+      'MESS-3': { EMP107: 6000 },
+    },
   };
 }
 

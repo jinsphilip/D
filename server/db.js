@@ -38,10 +38,18 @@ async function initDb() {
   const defaults = seedStore();
   const missing = Object.keys(defaults).filter((k) => !existingKeys.has(k));
 
-  if (missing.length > 0) {
-    await store.insertMany(
-      missing.map((key) => ({ _id: key, value: defaults[key], updatedAt: new Date() }))
+  // Upsert one at a time (not a single insertMany) so seeding is resumable:
+  // if the process gets killed or loses connection partway through, whatever
+  // already landed stays correct, and the next boot's `missing` check picks
+  // up exactly where it left off instead of silently leaving keys unseeded.
+  for (const key of missing) {
+    await store.updateOne(
+      { _id: key },
+      { $setOnInsert: { value: defaults[key], updatedAt: new Date() } },
+      { upsert: true }
     );
+  }
+  if (missing.length > 0) {
     console.log('Seeded default data for keys:', missing.join(', '));
   }
 }

@@ -2,9 +2,7 @@
 // top-level piece of app state (sites, employees, attendance, ...) as one
 // opaque JSON blob, so rather than modeling separate collections we keep
 // that shape server-side too: one document per key in a single `store`
-// collection, `{ _id: key, value: <anything>, updatedAt }`. This keeps the
-// REST contract (GET/PUT /api/data/:key) identical to the earlier
-// Postgres/file-based versions — only this file changed.
+// collection, `{ _id: key, value: <anything>, updatedAt }`.
 
 const { MongoClient } = require('mongodb');
 const seedStore = require('./seedData');

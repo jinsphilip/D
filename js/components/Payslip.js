@@ -79,7 +79,7 @@ function PayslipModal({ employee, site, mess, monthStr, settings, result, onClos
                   <td className="py-2 text-right font-medium text-slate-800">{formatCurrency(result.baseSalary, settings.currency)}</td>
                 </tr>
                 <tr className="border-b border-slate-100">
-                  <td className="py-2 text-slate-600">Overtime Allowance ({result.otUnits.toFixed(1)} unit(s) × {result.otMultiplier}x)</td>
+                  <td className="py-2 text-slate-600">Overtime Allowance ({result.otUnits.toFixed(1)} day(s) OT)</td>
                   <td className="py-2 text-right font-medium text-emerald-600">+ {formatCurrency(result.otEarnings, settings.currency)}</td>
                 </tr>
                 <tr className="border-b border-slate-100">

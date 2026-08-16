@@ -74,7 +74,7 @@ function seedAttendance() {
     [today]: {
       EMP101: { status: 'present', otCount: 1.0, note: '' },
       EMP102: { status: 'present', otCount: 0, note: '' },
-      EMP103: { status: 'present', otCount: 1.5, note: '' },
+      EMP103: { status: 'present', otCount: 0.5, note: '' },
       EMP104: { status: 'halfday', otCount: 0, note: 'Left early' },
       EMP105: { status: 'absent', otCount: 0, note: 'Medical leave' },
       EMP106: { status: 'present', otCount: 0, note: '' },
@@ -86,7 +86,6 @@ function seedSettings() {
   return {
     currency: '$',
     daysInMonthMode: '26',
-    defaultOtMultiplier: 1.5,
     companyName: 'Nikhila Engineering',
     companyAddress: '100 Enterprise Way, Suite 400',
   };

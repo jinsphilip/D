@@ -85,7 +85,7 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
 
   const otPreview = (emp, otCount) => {
     const dailyRate = workingDays > 0 ? emp.baseSalary / workingDays : 0;
-    return Number(otCount || 0) * (Number(settings.defaultOtMultiplier) || 1) * dailyRate;
+    return Number(otCount || 0) * dailyRate;
   };
 
   return (

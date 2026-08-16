@@ -24,7 +24,7 @@ function SettingsModule({ settings, setSettings, showToast }) {
     <div className="max-w-2xl space-y-4">
       <div>
         <h2 className="text-lg font-bold text-slate-900">System Configuration</h2>
-        <p className="text-sm text-slate-500">Currency, overtime rules and company profile</p>
+        <p className="text-sm text-slate-500">Currency, working days and company profile</p>
       </div>
 
       <form onSubmit={save} className="space-y-5">
@@ -75,28 +75,6 @@ function SettingsModule({ settings, setSettings, showToast }) {
               onChange={(e) => update({ currency: e.target.value })}
             />
           )}
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-          <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
-            <Icon name="clock" className="w-4 h-4 text-brand-600" /> Overtime Rules
-          </h3>
-          <Field label="Default OT Rate Multiplier" hint="Applied to all logged OT shift units when computing payroll">
-            <div className="flex gap-2">
-              {[1.0, 1.5].map((m) => (
-                <button
-                  type="button"
-                  key={m}
-                  onClick={() => update({ defaultOtMultiplier: m })}
-                  className={`touch-target px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    Number(form.defaultOtMultiplier) === m ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  {m.toFixed(1)}x
-                </button>
-              ))}
-            </div>
-          </Field>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">

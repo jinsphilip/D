@@ -16,7 +16,7 @@ const STORAGE_KEYS = {
 const DEPARTMENTS = ['Operations', 'Engineering', 'Quality Control', 'Logistics', 'Administration'];
 const SITE_STATUSES = ['Active', 'On Hold', 'Completed'];
 const MESS_STATUSES = ['Active', 'Inactive'];
-const OT_LEVELS = [0, 1.0, 1.5];
+const OT_LEVELS = [0, 0.5, 1.0];
 const ATTENDANCE_STATUSES = ['present', 'halfday', 'absent'];
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -127,7 +127,7 @@ function seedAttendance() {
     [today]: {
       EMP101: { status: 'present', otCount: 1.0, note: '' },
       EMP102: { status: 'present', otCount: 0, note: '' },
-      EMP103: { status: 'present', otCount: 1.5, note: '' },
+      EMP103: { status: 'present', otCount: 0.5, note: '' },
       EMP104: { status: 'halfday', otCount: 0, note: 'Left early' },
       EMP105: { status: 'absent', otCount: 0, note: 'Medical leave' },
       EMP106: { status: 'present', otCount: 0, note: '' },
@@ -139,7 +139,6 @@ function seedSettings() {
   return {
     currency: '$',
     daysInMonthMode: '26',
-    defaultOtMultiplier: 1.5,
     companyName: 'Nikhila Engineering',
     companyAddress: '100 Enterprise Way, Suite 400',
   };
@@ -190,19 +189,29 @@ function getWorkingDaysInMonth(monthStr, mode) {
   return 26; // Standard 26-day mode (default)
 }
 
-// Aggregate an employee's attendance stats for a given YYYY-MM month
+// Aggregate an employee's attendance stats for a given YYYY-MM month.
+// A day with no attendance record at all defaults to absent (no pay) — but
+// only once that day has actually finished. Today stays uncounted until
+// it's explicitly marked (gives the site manager the rest of the day to
+// log it) instead of being pre-emptively docked as absent at 9am; future
+// days are never counted either way.
 function getMonthAttendanceStats(employeeId, monthStr, attendance) {
-  const total = daysInCalendarMonth(monthStr);
+  const totalDaysInMonth = daysInCalendarMonth(monthStr);
+  const todayStr = todayISO();
+
   let presentDays = 0, halfDays = 0, absentDays = 0, otUnits = 0, loggedDays = 0;
-  for (let d = 1; d <= total; d++) {
+  for (let d = 1; d <= totalDaysInMonth; d++) {
     const dateKey = `${monthStr}-${pad2(d)}`;
     const record = attendance[dateKey] && attendance[dateKey][employeeId];
-    if (!record) continue;
-    loggedDays++;
-    if (record.status === 'present') presentDays++;
-    else if (record.status === 'halfday') halfDays++;
-    else if (record.status === 'absent') absentDays++;
-    otUnits += Number(record.otCount) || 0;
+    if (record && record.status) {
+      loggedDays++;
+      if (record.status === 'present') presentDays++;
+      else if (record.status === 'halfday') halfDays++;
+      else if (record.status === 'absent') absentDays++;
+      otUnits += Number(record.otCount) || 0;
+    } else if (dateKey < todayStr) {
+      absentDays++; // day already passed with nothing logged -> defaults to absent
+    }
   }
   return { presentDays, halfDays, absentDays, otUnits, loggedDays };
 }
@@ -250,8 +259,9 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   const halfDayDeduction = stats.halfDays * 0.5 * dailyRate;
   const totalDeductions = absentDeduction + halfDayDeduction;
 
-  const otMultiplier = Number(settings.defaultOtMultiplier) || 1;
-  const otEarnings = stats.otUnits * otMultiplier * dailyRate;
+  // Each day's logged OT level (0.5x or 1.0x) is itself the fraction of a
+  // day's pay earned for that day's overtime — no separate multiplier.
+  const otEarnings = stats.otUnits * dailyRate;
 
   const messDeduction = employee.messId ? getMessPerHeadShare(employee.messId, monthStr, messExpenses, allEmployees) : 0;
 
@@ -268,7 +278,6 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
     absentDeduction,
     halfDayDeduction,
     totalDeductions,
-    otMultiplier,
     otEarnings,
     messDeduction,
     appliedAdvances,

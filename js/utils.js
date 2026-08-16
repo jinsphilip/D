@@ -150,8 +150,16 @@ function seedSettings() {
 // having its own isolated localStorage copy.
 // ---------------------------------------------------------------------------
 
+// A 401 from any of these means the session cookie is missing or expired.
+// Broadcast it so the app-level auth gate can drop back to the login screen
+// instead of every caller having to check for it individually.
+function notifyUnauthorized() {
+  window.dispatchEvent(new CustomEvent('nep:unauthorized'));
+}
+
 async function apiGet(key) {
-  const res = await fetch(`/api/data/${key}`);
+  const res = await fetch(`/api/data/${key}`, { credentials: 'include' });
+  if (res.status === 401) { notifyUnauthorized(); throw new Error('Session expired — please log in again'); }
   if (!res.ok) throw new Error(`Server returned ${res.status} while loading data`);
   return res.json();
 }
@@ -159,11 +167,52 @@ async function apiGet(key) {
 async function apiPut(key, value) {
   const res = await fetch(`/api/data/${key}`, {
     method: 'PUT',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(value),
   });
+  if (res.status === 401) { notifyUnauthorized(); throw new Error('Session expired — please log in again'); }
   if (!res.ok) throw new Error(`Server returned ${res.status} while saving data`);
   return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Auth — single shared login (see server/auth.js)
+// ---------------------------------------------------------------------------
+
+async function fetchCurrentUser() {
+  const res = await fetch('/api/auth/me', { credentials: 'include' });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.username;
+}
+
+async function login(username, password) {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Login failed');
+  return data.username;
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+}
+
+async function changePassword(currentPassword, newPassword) {
+  const res = await fetch('/api/auth/change-password', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Failed to change password');
+  return true;
 }
 
 // ---------------------------------------------------------------------------

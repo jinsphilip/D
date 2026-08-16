@@ -1,8 +1,9 @@
 # Web service only — the database is MongoDB Atlas, not Render's own.
-# MONGODB_URI isn't set here since it's a secret: Render will prompt for it
-# during the Blueprint deploy (paste your Atlas connection string, see
-# DEPLOY.md), and you can update it any time under the service's
-# Environment settings without touching this file.
+# MONGODB_URI, ADMIN_USERNAME, and ADMIN_PASSWORD are secrets: Render will
+# prompt for them during the Blueprint deploy (see DEPLOY.md for what to
+# put in each), and you can update any of them later under the service's
+# Environment settings without touching this file. SESSION_SECRET doesn't
+# need a value from you at all — Render generates a random one automatically.
 #
 # Build/start commands explicitly `cd server` themselves rather than relying
 # on `rootDir` — on at least one account, Render ran these from the repo
@@ -19,3 +20,9 @@ services:
     envVars:
       - key: MONGODB_URI
         sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

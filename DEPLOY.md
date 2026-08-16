@@ -11,6 +11,9 @@ writes the same records. Changes made by one person show up for everyone
 else within a few seconds (the frontend polls the server every 6s — see
 "How syncing works" below).
 
+The app also now sits behind a login screen — see "Login / access control"
+below for how the first login gets set up and how it works.
+
 ## Deploy to Render + MongoDB Atlas
 
 This app runs on two pieces: **Render** hosts the Node/Express web service,
@@ -48,28 +51,42 @@ Using the included `render.yaml` Blueprint:
 1. Go to the [Render Dashboard](https://dashboard.render.com) → **New +** →
    **Blueprint** → connect this repository.
 2. Render reads `render.yaml` and shows the `nep-payroll-app` web service
-   it's about to create. Since `MONGODB_URI` is a secret, Render will
-   prompt you for it right there in the deploy flow — paste the Atlas
-   connection string from step 2. Click **Apply**.
+   it's about to create, and prompts you for three secrets right there in
+   the deploy flow (a fourth, `SESSION_SECRET`, is generated for you
+   automatically — no input needed):
+   - `MONGODB_URI` — the Atlas connection string from step 2.
+   - `ADMIN_USERNAME` / `ADMIN_PASSWORD` — whatever you want the first
+     login to be. These are only ever read once, the very first time the
+     server boots with no login configured yet; after that, change the
+     password from inside the app's Settings screen instead — these two
+     env vars are ignored on every later boot.
+
+   Click **Apply**.
 3. Once it finishes building and boots, open the URL Render gives you
-   (something like `https://nep-payroll-app.onrender.com`). The server
+   (something like `https://nep-payroll-app.onrender.com`) and sign in
+   with the `ADMIN_USERNAME`/`ADMIN_PASSWORD` you just set. The server
    creates its `store` collection and seeds the demo dataset into Atlas on
    first boot — check Atlas's **Browse Collections** afterward and you'll
    see `nep_payroll.store` there.
 
-Share that URL with everyone who needs to use the app — they're all now
-reading and writing the same Atlas database, no matter which device or
-browser they're on.
+Share the URL *and* the login with everyone who needs to use the app —
+they're all now reading and writing the same Atlas database, no matter
+which device or browser they're on.
 
-Forgot to paste `MONGODB_URI` during setup, or need to change it later?
-Render Dashboard → the `nep-payroll-app` service → **Environment** tab.
+Need to change any of these env vars later? Render Dashboard → the
+`nep-payroll-app` service → **Environment** tab. (Changing `ADMIN_USERNAME`/
+`ADMIN_PASSWORD` there does nothing after the first boot — see above. To
+reset a forgotten password instead, see "Login / access control" below.)
 
 ### If you'd rather not use the Blueprint
 
 **New +** → **Web Service** → connect this repo:
 - Build Command: `cd server && npm install`
 - Start Command: `cd server && npm start`
-- Environment → add `MONGODB_URI` = your Atlas connection string.
+- Environment → add `MONGODB_URI`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and
+  `SESSION_SECRET` (any long random string — e.g. run
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+  locally and paste the output).
 
 ## Local development
 
@@ -82,8 +99,9 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and paste your real connection string as `MONGODB_URI=...`,
-then:
+Edit `.env` and fill in `MONGODB_URI`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`,
+and `SESSION_SECRET` (see the comments in `.env.example` for what each one
+means), then:
 
 ```bash
 npm start
@@ -131,13 +149,41 @@ server; everything is served from the one Node process so the frontend's
   team logging attendance and running payroll; not built for heavy
   simultaneous editing of the same row.
 
+## Login / access control
+
+There's one shared login (a single username/password), not a separate
+account per person — everyone who uses the app signs in with the same
+credentials. That pair is set once, the very first time the server boots
+with no login configured yet in the database, from the `ADMIN_USERNAME`/
+`ADMIN_PASSWORD` env vars. After that first boot those two env vars are
+never read again — changing them in Render's Environment tab later has no
+effect. To actually change the password, sign into the app and use
+**Settings → Change Password**.
+
+**Forgot the password and can't sign in to change it?** The login itself
+lives in MongoDB (in the same `store` collection, under the key
+`nep_auth`), not in the env vars. Open Atlas → Browse Collections →
+`nep_payroll.store` → delete the `nep_auth` document → restart the Render
+service (Manual Deploy, or just wait for it to redeploy). On that next
+boot, with no login in the database, it re-bootstraps from
+`ADMIN_USERNAME`/`ADMIN_PASSWORD` again — update those in Render's
+Environment tab first if you want the reset login to be different from the
+original one.
+
+Sessions last 7 days and are stored as a signed cookie (not a server-side
+session table), so logging in on one device doesn't affect any other
+device's session.
+
 ## Things to know before relying on this in production
 
-- **No login / access control.** Anyone with the URL can view and edit all
-  data — there's no username/password gate. If this needs to be private,
-  either keep the URL unlisted, put it behind your own auth layer (a
-  reverse proxy with basic auth, a VPN, Render's IP allowlist on paid
-  plans), or ask to have a simple login added.
+- **This is one shared login, not per-person accounts.** There's no way to
+  tell which team member made a given change, and no role-based
+  permissions (everyone who's logged in can do everything). Good enough
+  for a small trusted team; not a substitute for real user management if
+  that's ever needed.
+- **No brute-force protection on login.** There's no rate limiting or
+  lockout after repeated failed attempts. Low risk for an internal tool
+  with an unlisted URL, but worth knowing.
 - **MongoDB Atlas's free M0 tier does not auto-pause from inactivity** —
   unlike some other free-tier databases, it's just always on. The one real
   limit is storage (512MB), which is far more than this app will ever use

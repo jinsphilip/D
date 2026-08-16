@@ -90,7 +90,7 @@ function ServerErrorScreen({ message }) {
   );
 }
 
-function App() {
+function AuthenticatedApp({ username, onLogout }) {
   const [sites, setSites, sitesErr] = useServerState(STORAGE_KEYS.sites, seedSites);
   const [employees, setEmployees, employeesErr] = useServerState(STORAGE_KEYS.employees, seedEmployees);
   const [attendance, setAttendance, attendanceErr] = useServerState(STORAGE_KEYS.attendance, seedAttendance);
@@ -160,7 +160,7 @@ function App() {
       <AdvancesModule employees={employees} advances={advances} setAdvances={setAdvances} settings={settings} showToast={showToast} />
     );
   } else if (tab === 'settings') {
-    content = <SettingsModule settings={settings} setSettings={setSettings} showToast={showToast} />;
+    content = <SettingsModule settings={settings} setSettings={setSettings} showToast={showToast} username={username} />;
   }
 
   return (
@@ -188,8 +188,18 @@ function App() {
             </button>
           ))}
         </nav>
-        <div className="px-5 py-4 border-t border-slate-100 text-[11px] text-slate-400 flex items-center gap-1.5">
-          <Icon name="refresh-cw" className="w-3 h-3" /> Synced with server · shared by all users
+        <div className="px-5 py-4 border-t border-slate-100 space-y-2">
+          <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+            <Icon name="refresh-cw" className="w-3 h-3" /> Synced with server · shared by all users
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-600 flex items-center gap-1.5 truncate">
+              <Icon name="user-circle" className="w-3.5 h-3.5 shrink-0" /> {username}
+            </span>
+            <button onClick={onLogout} className="text-xs font-medium text-slate-400 hover:text-rose-600 flex items-center gap-1 shrink-0">
+              <Icon name="log-out" className="w-3.5 h-3.5" /> Log out
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -229,6 +239,14 @@ function App() {
                 </button>
               ))}
             </nav>
+            <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-600 flex items-center gap-1.5 truncate">
+                <Icon name="user-circle" className="w-3.5 h-3.5 shrink-0" /> {username}
+              </span>
+              <button onClick={onLogout} className="text-xs font-medium text-slate-400 hover:text-rose-600 flex items-center gap-1 shrink-0">
+                <Icon name="log-out" className="w-3.5 h-3.5" /> Log out
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -259,6 +277,38 @@ function App() {
       {toastNode}
     </div>
   );
+}
+
+// Gates the whole app behind the shared login. Only once a session is
+// confirmed does AuthenticatedApp (and its useServerState hooks) mount at
+// all, so nothing under /api/data is ever requested pre-login.
+function App() {
+  const [authState, setAuthState] = React.useState('checking'); // checking | out | in
+  const [username, setUsername] = React.useState(null);
+
+  React.useEffect(() => {
+    fetchCurrentUser().then((name) => {
+      if (name) { setUsername(name); setAuthState('in'); }
+      else setAuthState('out');
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const onUnauthorized = () => { setAuthState('out'); setUsername(null); };
+    window.addEventListener('nep:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('nep:unauthorized', onUnauthorized);
+  }, []);
+
+  const handleLogin = (name) => { setUsername(name); setAuthState('in'); };
+  const handleLogout = async () => {
+    await logout().catch(() => {});
+    setUsername(null);
+    setAuthState('out');
+  };
+
+  if (authState === 'checking') return <LoadingScreen />;
+  if (authState === 'out') return <LoginScreen onLogin={handleLogin} />;
+  return <AuthenticatedApp username={username} onLogout={handleLogout} />;
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

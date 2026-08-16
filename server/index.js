@@ -23,17 +23,61 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const db = require('./db');
+const auth = require('./auth');
 
 const ROOT_DIR = path.join(__dirname, '..');
 const PORT = process.env.PORT || 3000;
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-app.get('/api/data', async (req, res) => {
+// --- Auth (public — no session required) ---------------------------------
+
+app.get('/api/auth/me', (req, res) => {
+  const username = auth.getSessionUsername(req);
+  if (!username) return res.status(401).json({ error: 'Not authenticated' });
+  res.json({ username });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
+    const ok = await auth.verifyLogin(username, password);
+    if (!ok) return res.status(401).json({ error: 'Invalid username or password' });
+    auth.setSessionCookie(req, res, auth.createSessionToken(username));
+    res.json({ ok: true, username });
+  } catch (e) {
+    console.error('Login failed:', e);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  auth.clearSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
+app.post('/api/auth/change-password', auth.requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Current and new password are required' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    const ok = await auth.changePassword(currentPassword, newPassword);
+    if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Change password failed:', e);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// --- App data (protected — requires a valid session) ----------------------
+
+app.get('/api/data', auth.requireAuth, async (req, res) => {
   try {
     res.json(await db.getAll());
   } catch (e) {
@@ -42,7 +86,7 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
-app.get('/api/data/:key', async (req, res) => {
+app.get('/api/data/:key', auth.requireAuth, async (req, res) => {
   try {
     res.json(await db.getValue(req.params.key));
   } catch (e) {
@@ -51,7 +95,7 @@ app.get('/api/data/:key', async (req, res) => {
   }
 });
 
-app.put('/api/data/:key', async (req, res) => {
+app.put('/api/data/:key', auth.requireAuth, async (req, res) => {
   try {
     await db.setValue(req.params.key, req.body);
     res.json({ ok: true });
@@ -62,12 +106,14 @@ app.put('/api/data/:key', async (req, res) => {
 });
 
 // Serve only the known frontend paths — never the whole repo root, so the
-// server/ directory (env vars, source) is never web-accessible.
+// server/ directory (env vars, source) is never web-accessible. These stay
+// public: the login page itself is part of this same static bundle.
 app.get('/', (req, res) => res.sendFile(path.join(ROOT_DIR, 'index.html')));
 app.use('/css', express.static(path.join(ROOT_DIR, 'css')));
 app.use('/js', express.static(path.join(ROOT_DIR, 'js')));
 
 db.initDb()
+  .then(() => auth.ensureAdminSeeded())
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Nikhila Engineering payroll server listening on port ${PORT}`);

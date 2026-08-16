@@ -1,6 +1,72 @@
 const CURRENCY_PRESETS = ['$', '₹', '€', '£', 'AED'];
 
-function SettingsModule({ settings, setSettings, showToast }) {
+function ChangePasswordSection({ username, showToast }) {
+  const [currentPassword, setCurrentPassword] = React.useState('');
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (newPassword.length < 6) { setError('New password must be at least 6 characters'); return; }
+    if (newPassword !== confirmPassword) { setError('New passwords do not match'); return; }
+    setSaving(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      showToast('Password changed');
+    } catch (err) {
+      setError(err.message || 'Failed to change password');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+        <Icon name="lock" className="w-4 h-4 text-brand-600" /> Change Password
+      </h3>
+      {username && <p className="text-xs text-slate-400 -mt-2">Logged in as {username}</p>}
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Current Password">
+          <input
+            type="password" className={inputClass} value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required
+          />
+        </Field>
+        <Field label="New Password" hint="At least 6 characters">
+          <input
+            type="password" className={inputClass} value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" required
+          />
+        </Field>
+        <Field label="Confirm New Password">
+          <input
+            type="password" className={inputClass} value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" required
+          />
+        </Field>
+        {error && (
+          <p className="text-sm text-rose-600 flex items-start gap-1.5">
+            <Icon name="alert-circle" className="w-4 h-4 shrink-0 mt-0.5" /> {error}
+          </p>
+        )}
+        <div className="flex justify-end">
+          <Button type="submit" disabled={saving}>
+            <Icon name="lock" className="w-4 h-4" /> {saving ? 'Updating…' : 'Update Password'}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function SettingsModule({ settings, setSettings, showToast, username }) {
   const [form, setForm] = React.useState(settings);
   const [customCurrency, setCustomCurrency] = React.useState(!CURRENCY_PRESETS.includes(settings.currency));
 
@@ -106,6 +172,8 @@ function SettingsModule({ settings, setSettings, showToast }) {
           </Button>
         </div>
       </form>
+
+      <ChangePasswordSection username={username} showToast={showToast} />
     </div>
   );
 }

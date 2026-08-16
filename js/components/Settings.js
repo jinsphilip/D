@@ -66,6 +66,82 @@ function ChangePasswordSection({ username, showToast }) {
   );
 }
 
+function HolidaysSection({ holidays, onChange }) {
+  const [newDate, setNewDate] = React.useState('');
+  const [newName, setNewName] = React.useState('');
+
+  const sorted = React.useMemo(
+    () => [...(holidays || [])].sort((a, b) => a.date.localeCompare(b.date)),
+    [holidays]
+  );
+
+  const addHoliday = (e) => {
+    e.preventDefault();
+    if (!newDate) return;
+    const rest = (holidays || []).filter((h) => h.date !== newDate);
+    onChange([...rest, { date: newDate, name: newName.trim() || 'Holiday' }]);
+    setNewDate('');
+    setNewName('');
+  };
+
+  const removeHoliday = (date) => {
+    onChange((holidays || []).filter((h) => h.date !== date));
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+          <Icon name="calendar-off" className="w-4 h-4 text-brand-600" /> Holidays
+        </h3>
+        <p className="text-xs text-slate-400 mt-1">
+          Every Sunday is automatically a holiday. Add any other non-working days (public holidays,
+          festivals, etc.) below — none of these count as absent when left unmarked in Attendance.
+        </p>
+      </div>
+
+      {sorted.length > 0 && (
+        <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
+          {sorted.map((h) => (
+            <li key={h.date} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+              <div>
+                <span className="font-medium text-slate-800">{dateLabel(h.date)}</span>
+                <span className="text-slate-400 ml-2">{h.name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeHoliday(h.date)}
+                className="touch-target text-slate-400 hover:text-rose-600 transition-colors"
+                aria-label={`Remove holiday ${h.date}`}
+              >
+                <Icon name="trash-2" className="w-4 h-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="date" className={inputClass + ' sm:w-auto'} value={newDate}
+          onChange={(e) => setNewDate(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addHoliday(e); }}
+        />
+        <input
+          className={inputClass}
+          placeholder="Holiday name (optional)"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') addHoliday(e); }}
+        />
+        <Button type="button" variant="secondary" onClick={addHoliday} disabled={!newDate}>
+          <Icon name="plus" className="w-4 h-4" /> Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function SettingsModule({ settings, setSettings, showToast, username }) {
   const [form, setForm] = React.useState(settings);
   const [customCurrency, setCustomCurrency] = React.useState(!CURRENCY_PRESETS.includes(settings.currency));
@@ -83,7 +159,7 @@ function SettingsModule({ settings, setSettings, showToast, username }) {
   const modes = [
     { key: '26', label: 'Standard 26 Days', hint: 'Excludes 4 Sundays' },
     { key: '30', label: 'Fixed 30 Days', hint: 'Flat month length' },
-    { key: 'actual', label: 'Actual Calendar Days', hint: 'Excludes Sundays dynamically' },
+    { key: 'actual', label: 'Actual Calendar Days', hint: 'Excludes Sundays & holidays dynamically' },
   ];
 
   return (
@@ -165,6 +241,8 @@ function SettingsModule({ settings, setSettings, showToast, username }) {
             ))}
           </div>
         </div>
+
+        <HolidaysSection holidays={form.holidays} onChange={(holidays) => update({ holidays })} />
 
         <div className="flex justify-end">
           <Button type="submit">

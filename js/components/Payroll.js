@@ -37,7 +37,7 @@ function PayrollModule({ employees, sites, messes, messExpenses, advances, atten
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Payroll &amp; Salary Calculation</h2>
-          <p className="text-sm text-slate-500">{monthLabel(month)} · {getWorkingDaysInMonth(month, settings.daysInMonthMode)} standard working days</p>
+          <p className="text-sm text-slate-500">{monthLabel(month)} · {getWorkingDaysInMonth(month, settings.daysInMonthMode, settings.holidays)} standard working days</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input type="month" className={inputClass + ' w-auto'} value={month} onChange={(e) => setMonth(e.target.value)} />

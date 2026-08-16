@@ -68,7 +68,9 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
   }, [date]);
 
   const monthStr = date.slice(0, 7);
-  const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode);
+  const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode, settings.holidays);
+  const holiday = isHolidayDate(date, settings.holidays);
+  const holidayName = isSunday(date) ? 'Sunday' : ((settings.holidays || []).find((h) => h.date === date) || {}).name || 'Holiday';
 
   const filteredEmployees = React.useMemo(() => {
     let list = employees.filter((e) => e.status === 'Active');
@@ -141,6 +143,7 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
           <h2 className="text-lg font-bold text-slate-900">Daily Attendance</h2>
           <p className="text-sm text-slate-500 flex items-center gap-2">
             {dateLabel(date)}
+            {holiday && <Badge tone="blue">{holidayName} · Holiday</Badge>}
             {dirty && <Badge tone="amber">Unsaved changes</Badge>}
           </p>
         </div>

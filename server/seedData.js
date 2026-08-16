@@ -92,6 +92,7 @@ function seedSettings() {
     daysInMonthMode: '26',
     companyName: 'Nikhila Engineering',
     companyAddress: '100 Enterprise Way, Suite 400',
+    holidays: [],
   };
 }
 

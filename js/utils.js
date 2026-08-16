@@ -145,6 +145,7 @@ function seedSettings() {
     daysInMonthMode: '26',
     companyName: 'Nikhila Engineering',
     companyAddress: '100 Enterprise Way, Suite 400',
+    holidays: [],
   };
 }
 
@@ -228,14 +229,25 @@ function daysInCalendarMonth(monthStr) {
   return new Date(y, m, 0).getDate();
 }
 
-function getWorkingDaysInMonth(monthStr, mode) {
+// Sundays are always holidays; anything else has to be listed explicitly in
+// Settings (holidays: [{ date: 'YYYY-MM-DD', name }]).
+function isSunday(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay() === 0;
+}
+
+function isHolidayDate(dateStr, holidays) {
+  if (isSunday(dateStr)) return true;
+  return (holidays || []).some((h) => h.date === dateStr);
+}
+
+function getWorkingDaysInMonth(monthStr, mode, holidays) {
   if (mode === '30') return 30;
   if (mode === 'actual') {
-    const [y, m] = monthStr.split('-').map(Number);
-    const total = new Date(y, m, 0).getDate();
+    const total = daysInCalendarMonth(monthStr);
     let count = 0;
     for (let d = 1; d <= total; d++) {
-      if (new Date(y, m - 1, d).getDay() !== 0) count++;
+      if (!isHolidayDate(`${monthStr}-${pad2(d)}`, holidays)) count++;
     }
     return count;
   }
@@ -248,7 +260,7 @@ function getWorkingDaysInMonth(monthStr, mode) {
 // it's explicitly marked (gives the site manager the rest of the day to
 // log it) instead of being pre-emptively docked as absent at 9am; future
 // days are never counted either way.
-function getMonthAttendanceStats(employeeId, monthStr, attendance) {
+function getMonthAttendanceStats(employeeId, monthStr, attendance, holidays) {
   const totalDaysInMonth = daysInCalendarMonth(monthStr);
   const todayStr = todayISO();
 
@@ -262,9 +274,12 @@ function getMonthAttendanceStats(employeeId, monthStr, attendance) {
       else if (record.status === 'halfday') halfDays++;
       else if (record.status === 'absent') absentDays++;
       otUnits += Number(record.otCount) || 0;
-    } else if (dateKey < todayStr) {
+    } else if (dateKey < todayStr && !isHolidayDate(dateKey, holidays)) {
       absentDays++; // day already passed with nothing logged -> defaults to absent
     }
+    // Sundays/holidays left unmarked are simply skipped — not a working day,
+    // so no default-absent deduction (unless someone was explicitly logged
+    // as having worked it, handled by the branch above).
   }
   return { presentDays, halfDays, absentDays, otUnits, loggedDays };
 }
@@ -311,9 +326,9 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   const messExpenses = extras.messExpenses || {};
   const advances = extras.advances || [];
 
-  const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode);
+  const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode, settings.holidays);
   const dailyRate = workingDays > 0 ? employee.baseSalary / workingDays : 0;
-  const stats = getMonthAttendanceStats(employee.id, monthStr, attendance);
+  const stats = getMonthAttendanceStats(employee.id, monthStr, attendance, settings.holidays);
 
   const absentDeduction = stats.absentDays * dailyRate;
   const halfDayDeduction = stats.halfDays * 0.5 * dailyRate;

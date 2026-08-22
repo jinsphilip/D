@@ -31,24 +31,22 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Payslip / print optimization */
+/* Payslip / print optimization. PayslipModal renders via a portal into
+   #print-root (a sibling of #root — see index.html), so printing can hide
+   #root outright instead of the more common visibility:hidden trick, which
+   leaves the rest of the app's real layout height in place and produces
+   extra blank pages after the payslip's own single page. */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  #payslip-print-area, #payslip-print-area * {
-    visibility: visible;
-  }
-  #payslip-print-area {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    margin: 0;
-    padding: 24px;
+  #root {
+    display: none;
   }
   .no-print {
     display: none !important;
+  }
+  #payslip-print-area {
+    width: 100%;
+    margin: 0;
+    padding: 24px;
   }
   @page {
     size: A4;

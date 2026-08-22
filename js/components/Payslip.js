@@ -1,7 +1,12 @@
 function PayslipModal({ employee, site, mess, monthStr, settings, result, onClose }) {
   const handlePrint = () => window.print();
 
-  return (
+  // Rendered via a portal into #print-root (a sibling of #root in
+  // index.html) rather than inline in the component tree, so the print
+  // stylesheet can hide #root entirely instead of just hiding its contents
+  // with visibility — the latter left the rest of the app's real layout
+  // height in place and produced extra blank printed pages.
+  return ReactDOM.createPortal(
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-slate-900/50 no-print" onClick={onClose}></div>
       <div className="relative bg-white w-full sm:max-w-2xl sm:rounded-2xl shadow-xl my-0 sm:my-8 fade-in">
@@ -120,6 +125,7 @@ function PayslipModal({ employee, site, mess, monthStr, settings, result, onClos
           <p className="text-[11px] text-slate-300 mt-8 text-center">This is a system-generated payslip and does not require a signature.</p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.getElementById('print-root')
   );
 }

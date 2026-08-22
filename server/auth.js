@@ -17,6 +17,15 @@ if (!sessionSecret) {
   process.exit(1);
 }
 
+// Temporary escape hatch: set BYPASS_AUTH=true in server/.env to skip the
+// login screen entirely (every request is treated as already authenticated
+// as "bypass-user"). For local troubleshooting only — never set this on
+// Render or any environment other people can reach.
+const BYPASS_AUTH = process.env.BYPASS_AUTH === 'true';
+if (BYPASS_AUTH) {
+  console.warn('BYPASS_AUTH is enabled — the login screen is disabled and all requests are unauthenticated. Do not use this outside local development.');
+}
+
 // Passwords are stored as plain text (by explicit request) rather than
 // hashed. Comparisons still go through a timing-safe check so the login
 // endpoint doesn't leak how much of the password was guessed correctly via
@@ -112,6 +121,7 @@ function clearSessionCookie(req, res) {
 }
 
 function getSessionUsername(req) {
+  if (BYPASS_AUTH) return 'bypass-user';
   const cookies = parseCookies(req.headers.cookie);
   return verifySessionToken(cookies[SESSION_COOKIE]);
 }

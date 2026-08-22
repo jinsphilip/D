@@ -241,6 +241,43 @@ function isHolidayDate(dateStr, holidays) {
   return (holidays || []).some((h) => h.date === dateStr);
 }
 
+// dateStr shifted by n days (n may be negative).
+function addDays(dateStr, n) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+// Monday-anchored start of the week containing dateStr, so Sunday (always a
+// holiday) naturally lands at the end of the week rather than the start.
+function startOfWeek(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const day = new Date(y, m - 1, d).getDay(); // 0=Sun..6=Sat
+  return addDays(dateStr, day === 0 ? -6 : 1 - day);
+}
+
+// `count` consecutive YYYY-MM-DD strings starting at startDateStr.
+function datesInRange(startDateStr, count) {
+  const out = [];
+  for (let i = 0; i < count; i++) out.push(addDays(startDateStr, i));
+  return out;
+}
+
+// Every YYYY-MM-DD in a calendar month.
+function datesInMonth(monthStr) {
+  const total = daysInCalendarMonth(monthStr);
+  const out = [];
+  for (let d = 1; d <= total; d++) out.push(`${monthStr}-${pad2(d)}`);
+  return out;
+}
+
+// Compact column-header label for a grid, e.g. "Mon 17" — dateLabel is too
+// verbose (weekday + month + day + year) for a narrow grid column.
+function shortDateLabel(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+}
+
 function getWorkingDaysInMonth(monthStr, mode, holidays) {
   if (mode === '30') return 30;
   if (mode === 'actual') {

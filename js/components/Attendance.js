@@ -47,23 +47,21 @@ function StatusSelector({ value, onChange }) {
 }
 
 const BLANK_RECORD = { status: undefined, otCount: 0, note: '' };
+const STATUS_CYCLE = [undefined, 'present', 'halfday', 'absent'];
 
-function AttendanceModule({ employees, sites, attendance, setAttendance, settings, siteFilter, setSiteFilter, showToast }) {
-  const [date, setDate] = React.useState(todayISO());
-  // Edits happen against this local draft first; nothing reaches the shared
-  // backend until "Save Attendance" is clicked, so a whole date's worth of
-  // taps/edits becomes one deliberate save instead of one network write per
-  // click.
-  const [draft, setDraft] = React.useState(() => attendance[date] || {});
-  const [dirty, setDirty] = React.useState(false);
+// Single-day attendance view: pick a date, edit each employee's status/OT/note,
+// Save Attendance commits. Edits are tracked as a sparse `changes` overlay
+// (only employees actually touched) rather than a full per-date snapshot, so
+// an employee nobody edited always reflects the latest server value (picked
+// up by background polling) and saving never clobbers another user's
+// concurrent edit to a *different* employee on the same date — only the
+// employees this session actually changed are merged in.
+function DayView({ date, changeDate, employees, sites, siteName, attendance, setAttendance, settings, dirty, setDirty, showToast }) {
+  const [changes, setChanges] = React.useState({});
 
   React.useEffect(() => {
-    setDraft(attendance[date] || {});
+    setChanges({});
     setDirty(false);
-    // Intentionally only re-syncs when the selected date changes, not on
-    // every `attendance` update (e.g. a background poll picking up someone
-    // else's edits elsewhere) — that would silently wipe out in-progress
-    // local edits on the date currently being worked on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
@@ -72,26 +70,16 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
   const holiday = isHolidayDate(date, settings.holidays);
   const holidayName = isSunday(date) ? 'Sunday' : ((settings.holidays || []).find((h) => h.date === date) || {}).name || 'Holiday';
 
-  const filteredEmployees = React.useMemo(() => {
-    let list = employees.filter((e) => e.status === 'Active');
-    if (siteFilter !== 'all') list = list.filter((e) => e.siteId === siteFilter);
-    return list;
-  }, [employees, siteFilter]);
-
-  const siteName = (id) => (sites.find((s) => s.id === id) || {}).name || 'Unassigned';
-
-  const getRecord = (empId) => draft[empId] || BLANK_RECORD;
-
-  const changeDate = (nextDate) => {
-    if (dirty && !window.confirm('You have unsaved attendance changes for this date. Switch dates and discard them?')) {
-      return;
-    }
-    setDate(nextDate);
+  const recordFromChanges = (changesObj, empId) => {
+    const override = changesObj[empId];
+    if (override !== undefined) return override || BLANK_RECORD;
+    return (attendance[date] && attendance[date][empId]) || BLANK_RECORD;
   };
+  const getRecord = (empId) => recordFromChanges(changes, empId);
 
   const updateRecord = (empId, patch) => {
-    setDraft((prev) => {
-      const current = prev[empId] || BLANK_RECORD;
+    setChanges((prev) => {
+      const current = recordFromChanges(prev, empId);
       const next = { ...current, ...patch };
       if (next.status === 'absent') next.otCount = 0; // no OT on a day not worked
       return { ...prev, [empId]: next };
@@ -100,33 +88,40 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
   };
 
   const markAllPresent = () => {
-    setDraft((prev) => {
+    setChanges((prev) => {
       const next = { ...prev };
-      filteredEmployees.forEach((emp) => {
-        const current = next[emp.id] || BLANK_RECORD;
-        next[emp.id] = { ...current, status: 'present' };
+      employees.forEach((emp) => {
+        next[emp.id] = { ...recordFromChanges(prev, emp.id), status: 'present' };
       });
       return next;
     });
     setDirty(true);
-    showToast(`Marked ${filteredEmployees.length} employee(s) present (not yet saved)`);
+    showToast(`Marked ${employees.length} employee(s) present (not yet saved)`);
   };
 
   const markAllAbsent = () => {
-    setDraft((prev) => {
+    setChanges((prev) => {
       const next = { ...prev };
-      filteredEmployees.forEach((emp) => {
-        const current = next[emp.id] || BLANK_RECORD;
-        next[emp.id] = { ...current, status: 'absent', otCount: 0 };
+      employees.forEach((emp) => {
+        next[emp.id] = { ...recordFromChanges(prev, emp.id), status: 'absent', otCount: 0 };
       });
       return next;
     });
     setDirty(true);
-    showToast(`Marked ${filteredEmployees.length} employee(s) absent (not yet saved)`);
+    showToast(`Marked ${employees.length} employee(s) absent (not yet saved)`);
   };
 
   const saveAttendance = () => {
-    setAttendance((prev) => ({ ...prev, [date]: draft }));
+    setAttendance((prev) => {
+      const merged = { ...(prev[date] || {}) };
+      Object.keys(changes).forEach((empId) => {
+        const rec = changes[empId];
+        if (rec && rec.status) merged[empId] = rec;
+        else delete merged[empId];
+      });
+      return { ...prev, [date]: merged };
+    });
+    setChanges({});
     setDirty(false);
     showToast('Attendance saved');
   };
@@ -139,14 +134,11 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Daily Attendance</h2>
-          <p className="text-sm text-slate-500 flex items-center gap-2">
-            {dateLabel(date)}
-            {holiday && <Badge tone="blue">{holidayName} · Holiday</Badge>}
-            {dirty && <Badge tone="amber">Unsaved changes</Badge>}
-          </p>
-        </div>
+        <p className="text-sm text-slate-500 flex items-center gap-2">
+          {dateLabel(date)}
+          {holiday && <Badge tone="blue">{holidayName} · Holiday</Badge>}
+          {dirty && <Badge tone="amber">Unsaved changes</Badge>}
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="date"
@@ -155,14 +147,10 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
             max={todayISO()}
             onChange={(e) => changeDate(e.target.value)}
           />
-          <select className={selectClass + ' w-auto min-w-[160px]'} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
-            <option value="all">All Sites</option>
-            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <Button variant="secondary" onClick={markAllPresent} disabled={filteredEmployees.length === 0}>
+          <Button variant="secondary" onClick={markAllPresent} disabled={employees.length === 0}>
             <Icon name="check-check" className="w-4 h-4" /> Mark Filtered Present
           </Button>
-          <Button variant="secondary" onClick={markAllAbsent} disabled={filteredEmployees.length === 0}>
+          <Button variant="secondary" onClick={markAllAbsent} disabled={employees.length === 0}>
             <Icon name="x" className="w-4 h-4" /> Mark Filtered Absent
           </Button>
           <Button onClick={saveAttendance} disabled={!dirty}>
@@ -171,13 +159,13 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
         </div>
       </div>
 
-      {filteredEmployees.length === 0 ? (
+      {employees.length === 0 ? (
         <EmptyState icon="calendar-x" title="No staff to display" message="Adjust the site filter or assign staff to a site first." />
       ) : (
         <React.Fragment>
           {/* Mobile card list */}
           <div className="md:hidden space-y-3">
-            {filteredEmployees.map((emp) => {
+            {employees.map((emp) => {
               const record = getRecord(emp.id);
               return (
                 <div key={emp.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
@@ -229,7 +217,7 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEmployees.map((emp) => {
+                  {employees.map((emp) => {
                     const record = getRecord(emp.id);
                     return (
                       <tr key={emp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 align-top">
@@ -267,6 +255,310 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
             </div>
           </div>
         </React.Fragment>
+      )}
+    </div>
+  );
+}
+
+function gridCellClasses(status, isHoliday, isFuture) {
+  if (isFuture) return 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed';
+  const tone = attendanceStatusTone(status);
+  if (tone === 'slate') {
+    return isHoliday
+      ? 'bg-blue-50 text-blue-300 border-blue-100 hover:bg-blue-100 cursor-pointer'
+      : 'bg-white text-slate-300 border-slate-200 hover:bg-slate-50 cursor-pointer';
+  }
+  const active = {
+    green: 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600',
+    amber: 'bg-amber-400 text-white border-amber-400 hover:bg-amber-500',
+    red: 'bg-rose-500 text-white border-rose-500 hover:bg-rose-600',
+  };
+  return active[tone];
+}
+
+function gridCellLabel(status) {
+  if (status === 'present') return 'P';
+  if (status === 'halfday') return 'H';
+  if (status === 'absent') return 'A';
+  return '';
+}
+
+// Week/Month attendance grid: rows = employees, columns = every date in the
+// visible range. Clicking a cell cycles None -> Present -> Half Day ->
+// Absent -> None; "Mark Shown Present/Absent" bulk-applies to every
+// non-future, non-holiday day in the range for the currently listed
+// employees. Like DayView, edits are a sparse overlay on top of the live
+// `attendance` prop (only touched employee+date pairs are tracked), so
+// saving merges just those pairs into the freshest server state instead of
+// overwriting whole dates.
+function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth, employees, attendance, setAttendance, settings, dirty, setDirty, showToast }) {
+  const dates = mode === 'week' ? datesInRange(startOfWeek(weekAnchor), 7) : datesInMonth(month);
+  const rangeKey = `${mode}_${dates[0]}_${dates[dates.length - 1]}`;
+
+  const [changes, setChanges] = React.useState({});
+
+  React.useEffect(() => {
+    setChanges({});
+    setDirty(false);
+    // Resyncs only when the visible range's identity changes (week/month
+    // navigation, or switching between the two) — not on every attendance
+    // poll, matching DayView's rule.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeKey]);
+
+  const recordFromChanges = (changesObj, date, empId) => {
+    const dayChanges = changesObj[date];
+    const override = dayChanges && dayChanges[empId];
+    if (override !== undefined) return override || BLANK_RECORD;
+    return (attendance[date] && attendance[date][empId]) || BLANK_RECORD;
+  };
+  const getRecord = (date, empId) => recordFromChanges(changes, date, empId);
+
+  const cycleStatus = (date, empId) => {
+    if (date > todayISO()) return;
+    const current = getRecord(date, empId);
+    const idx = STATUS_CYCLE.indexOf(current.status);
+    const nextStatus = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+    const nextRecord = nextStatus ? { ...current, status: nextStatus, otCount: nextStatus === 'absent' ? 0 : current.otCount } : null;
+    setChanges((prev) => ({ ...prev, [date]: { ...(prev[date] || {}), [empId]: nextRecord } }));
+    setDirty(true);
+  };
+
+  const bulkFill = (status) => {
+    const targetDates = dates.filter((d) => d <= todayISO() && !isHolidayDate(d, settings.holidays));
+    if (targetDates.length === 0) {
+      showToast('No eligible days to bulk-mark in this range.');
+      return;
+    }
+    setChanges((prev) => {
+      const next = { ...prev };
+      targetDates.forEach((date) => {
+        const dayChanges = { ...(next[date] || {}) };
+        employees.forEach((emp) => {
+          const current = recordFromChanges(prev, date, emp.id);
+          dayChanges[emp.id] = { ...current, status, otCount: status === 'absent' ? 0 : current.otCount };
+        });
+        next[date] = dayChanges;
+      });
+      return next;
+    });
+    setDirty(true);
+    showToast(`Marked ${employees.length} employee(s) × ${targetDates.length} day(s) ${status} (not yet saved)`);
+  };
+
+  const saveRange = () => {
+    setAttendance((prev) => {
+      const next = { ...prev };
+      Object.keys(changes).forEach((date) => {
+        const merged = { ...(prev[date] || {}) };
+        Object.keys(changes[date]).forEach((empId) => {
+          const rec = changes[date][empId];
+          if (rec && rec.status) merged[empId] = rec;
+          else delete merged[empId];
+        });
+        next[date] = merged;
+      });
+      return next;
+    });
+    setChanges({});
+    setDirty(false);
+    showToast('Attendance saved');
+  };
+
+  const rangeLabel = mode === 'week'
+    ? `${shortDateLabel(dates[0])} – ${shortDateLabel(dates[dates.length - 1])}, ${dates[0].slice(0, 4)}`
+    : monthLabel(month);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <p className="text-sm text-slate-500 flex items-center gap-2">
+          {rangeLabel}
+          {dirty && <Badge tone="amber">Unsaved changes</Badge>}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {mode === 'week' ? (
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => changeWeekAnchor(addDays(weekAnchor, -7))} className="touch-target p-2 rounded-lg border border-slate-300 hover:bg-slate-50" aria-label="Previous week">
+                <Icon name="chevron-left" className="w-4 h-4" />
+              </button>
+              <input type="date" className={inputClass + ' w-auto'} value={weekAnchor} onChange={(e) => changeWeekAnchor(e.target.value)} />
+              <button type="button" onClick={() => changeWeekAnchor(addDays(weekAnchor, 7))} className="touch-target p-2 rounded-lg border border-slate-300 hover:bg-slate-50" aria-label="Next week">
+                <Icon name="chevron-right" className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => changeMonth(prevMonthStr(month))} className="touch-target p-2 rounded-lg border border-slate-300 hover:bg-slate-50" aria-label="Previous month">
+                <Icon name="chevron-left" className="w-4 h-4" />
+              </button>
+              <input type="month" className={inputClass + ' w-auto'} value={month} onChange={(e) => changeMonth(e.target.value)} />
+              <button type="button" onClick={() => changeMonth(nextMonthStr(month))} className="touch-target p-2 rounded-lg border border-slate-300 hover:bg-slate-50" aria-label="Next month">
+                <Icon name="chevron-right" className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          <Button variant="secondary" onClick={() => bulkFill('present')} disabled={employees.length === 0}>
+            <Icon name="check-check" className="w-4 h-4" /> Mark Shown Present
+          </Button>
+          <Button variant="secondary" onClick={() => bulkFill('absent')} disabled={employees.length === 0}>
+            <Icon name="x" className="w-4 h-4" /> Mark Shown Absent
+          </Button>
+          <Button onClick={saveRange} disabled={!dirty}>
+            <Icon name="save" className="w-4 h-4" /> Save Attendance
+          </Button>
+        </div>
+      </div>
+
+      {employees.length === 0 ? (
+        <EmptyState icon="calendar-x" title="No staff to display" message="Adjust the site filter or assign staff to a site first." />
+      ) : (
+        <React.Fragment>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block"></span> Present</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-400 inline-block"></span> Half Day</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-rose-500 inline-block"></span> Absent</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-50 border border-blue-100 inline-block"></span> Sunday / Holiday</span>
+            <span>Click a cell to cycle its status.</span>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-auto max-h-[65vh]">
+              <table className="text-sm border-collapse">
+                <thead>
+                  <tr>
+                    <th className="sticky top-0 left-0 z-20 bg-slate-50 px-3 py-2 text-left text-xs font-medium text-slate-500 border-b border-r border-slate-100" style={{ minWidth: '10rem' }}>
+                      Employee
+                    </th>
+                    {dates.map((d) => {
+                      const future = d > todayISO();
+                      const hol = isHolidayDate(d, settings.holidays);
+                      return (
+                        <th
+                          key={d}
+                          className={`sticky top-0 z-10 px-1 py-2 text-center text-[11px] font-medium border-b border-slate-100 ${
+                            future ? 'bg-slate-50 text-slate-300' : hol ? 'bg-blue-50 text-blue-600' : 'bg-slate-50/60 text-slate-500'
+                          }`}
+                          style={{ minWidth: '2.75rem' }}
+                        >
+                          {shortDateLabel(d)}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map((emp) => (
+                    <tr key={emp.id} className="border-b border-slate-50 last:border-0">
+                      <td className="sticky left-0 z-10 bg-white px-3 py-1.5 border-r border-slate-100">
+                        <div className="font-medium text-slate-800 text-xs">{emp.name}</div>
+                        <div className="text-[10px] text-slate-400">{emp.id}</div>
+                      </td>
+                      {dates.map((d) => {
+                        const record = getRecord(d, emp.id);
+                        const future = d > todayISO();
+                        const hol = isHolidayDate(d, settings.holidays);
+                        return (
+                          <td key={d} className="px-1 py-1.5 text-center">
+                            <button
+                              type="button"
+                              disabled={future}
+                              onClick={() => cycleStatus(d, emp.id)}
+                              title={`${emp.name} · ${shortDateLabel(d)}${record.status ? ' · ' + attendanceStatusLabel(record.status) : ''}`}
+                              className={`w-8 h-8 mx-auto rounded-md border text-xs font-semibold flex items-center justify-center transition-colors ${gridCellClasses(record.status, hol, future)}`}
+                            >
+                              {gridCellLabel(record.status)}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </React.Fragment>
+      )}
+    </div>
+  );
+}
+
+const ATTENDANCE_VIEW_MODES = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+];
+
+function AttendanceModule({ employees, sites, attendance, setAttendance, settings, siteFilter, setSiteFilter, showToast }) {
+  const [viewMode, setViewMode] = React.useState('day');
+  const [date, setDate] = React.useState(todayISO());
+  const [weekAnchor, setWeekAnchor] = React.useState(todayISO());
+  const [month, setMonth] = React.useState(currentMonthStr());
+  const [dirty, setDirty] = React.useState(false);
+
+  const filteredEmployees = React.useMemo(() => {
+    let list = employees.filter((e) => e.status === 'Active');
+    if (siteFilter !== 'all') list = list.filter((e) => e.siteId === siteFilter);
+    return list;
+  }, [employees, siteFilter]);
+
+  const siteName = (id) => (sites.find((s) => s.id === id) || {}).name || 'Unassigned';
+
+  const guardedNav = (setter) => (value) => {
+    if (dirty && !window.confirm('You have unsaved attendance changes. Switch and discard them?')) return;
+    setter(value);
+  };
+  const changeDate = guardedNav(setDate);
+  const changeWeekAnchor = guardedNav(setWeekAnchor);
+  const changeMonth = guardedNav(setMonth);
+  const changeViewMode = guardedNav(setViewMode);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Attendance</h2>
+          <p className="text-sm text-slate-500">Mark attendance by day, week or month.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden">
+            {ATTENDANCE_VIEW_MODES.map((v, i) => (
+              <button
+                key={v.key}
+                type="button"
+                onClick={() => changeViewMode(v.key)}
+                className={`px-3 py-1.5 text-xs font-medium touch-target transition-colors ${i > 0 ? 'border-l border-slate-300' : ''} ${
+                  viewMode === v.key ? 'bg-brand-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <select className={selectClass + ' w-auto min-w-[160px]'} value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+            <option value="all">All Sites</option>
+            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {viewMode === 'day' && (
+        <DayView
+          date={date} changeDate={changeDate} employees={filteredEmployees} sites={sites} siteName={siteName}
+          attendance={attendance} setAttendance={setAttendance} settings={settings}
+          dirty={dirty} setDirty={setDirty} showToast={showToast}
+        />
+      )}
+      {viewMode !== 'day' && (
+        <RangeGridView
+          mode={viewMode}
+          weekAnchor={weekAnchor} changeWeekAnchor={changeWeekAnchor}
+          month={month} changeMonth={changeMonth}
+          employees={filteredEmployees}
+          attendance={attendance} setAttendance={setAttendance} settings={settings}
+          dirty={dirty} setDirty={setDirty} showToast={showToast}
+        />
       )}
     </div>
   );

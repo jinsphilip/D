@@ -260,14 +260,10 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
   );
 }
 
-function gridCellClasses(status, isHoliday, isFuture) {
+function gridCellClasses(status, isFuture) {
   if (isFuture) return 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed';
   const tone = attendanceStatusTone(status);
-  if (tone === 'slate') {
-    return isHoliday
-      ? 'bg-blue-50 text-blue-300 border-blue-100 hover:bg-blue-100 cursor-pointer'
-      : 'bg-white text-slate-300 border-slate-200 hover:bg-slate-50 cursor-pointer';
-  }
+  if (tone === 'slate') return 'bg-white text-slate-300 border-slate-200 hover:bg-slate-50 cursor-pointer';
   const active = {
     green: 'bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600',
     amber: 'bg-amber-400 text-white border-amber-400 hover:bg-amber-500',
@@ -283,15 +279,35 @@ function gridCellLabel(status) {
   return '';
 }
 
+// OT is only meaningful on a day actually worked.
+function otEditable(status) {
+  return status === 'present' || status === 'halfday';
+}
+
+function otCellLabel(otCount) {
+  const n = Number(otCount) || 0;
+  return n === 0 ? '—' : `${n.toFixed(1)}x`;
+}
+
+function otCellClasses(status, otCount, isFuture) {
+  if (isFuture || !otEditable(status)) return 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed';
+  return Number(otCount) > 0
+    ? 'bg-violet-600 text-white border-violet-600 hover:bg-violet-700 cursor-pointer'
+    : 'bg-white text-slate-300 border-slate-200 hover:bg-slate-50 cursor-pointer';
+}
+
 // Week/Month attendance grid: rows = employees, columns = every date in the
-// visible range. Clicking a cell cycles None -> Present -> Half Day ->
-// Absent -> None; "Mark Shown Present/Absent" bulk-applies to every
-// non-future, non-holiday day in the range for the currently listed
-// employees. Like DayView, edits are a sparse overlay on top of the live
+// visible range. Each cell has a status swatch (click cycles None -> Present
+// -> Half Day -> Absent -> None) and, below it, an OT swatch (click cycles
+// None -> 0.5x -> 1.0x -> 1.5x -> None, only while the day is marked
+// Present/Half Day). "Mark Shown Present/Absent" bulk-applies to every
+// non-future day in the range for the currently listed employees — Sundays
+// and Settings holidays are not treated specially here, same as every other
+// day. Like DayView, edits are a sparse overlay on top of the live
 // `attendance` prop (only touched employee+date pairs are tracked), so
 // saving merges just those pairs into the freshest server state instead of
 // overwriting whole dates.
-function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth, employees, attendance, setAttendance, settings, dirty, setDirty, showToast }) {
+function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth, employees, attendance, setAttendance, dirty, setDirty, showToast }) {
   const dates = mode === 'week' ? datesInRange(startOfWeek(weekAnchor), 7) : datesInMonth(month);
   const rangeKey = `${mode}_${dates[0]}_${dates[dates.length - 1]}`;
 
@@ -324,8 +340,18 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
     setDirty(true);
   };
 
+  const cycleOt = (date, empId) => {
+    if (date > todayISO()) return;
+    const current = getRecord(date, empId);
+    if (!otEditable(current.status)) return; // no OT on a day not worked
+    const idx = OT_LEVELS.indexOf(Number(current.otCount) || 0);
+    const nextOt = OT_LEVELS[(idx + 1) % OT_LEVELS.length];
+    setChanges((prev) => ({ ...prev, [date]: { ...(prev[date] || {}), [empId]: { ...current, otCount: nextOt } } }));
+    setDirty(true);
+  };
+
   const bulkFill = (status) => {
-    const targetDates = dates.filter((d) => d <= todayISO() && !isHolidayDate(d, settings.holidays));
+    const targetDates = dates.filter((d) => d <= todayISO());
     if (targetDates.length === 0) {
       showToast('No eligible days to bulk-mark in this range.');
       return;
@@ -418,8 +444,8 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block"></span> Present</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-400 inline-block"></span> Half Day</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-rose-500 inline-block"></span> Absent</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-50 border border-blue-100 inline-block"></span> Sunday / Holiday</span>
-            <span>Click a cell to cycle its status.</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-violet-600 inline-block"></span> OT marked</span>
+            <span>Top of a cell cycles status, bottom cycles OT (Present/Half Day only).</span>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -432,12 +458,11 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
                     </th>
                     {dates.map((d) => {
                       const future = d > todayISO();
-                      const hol = isHolidayDate(d, settings.holidays);
                       return (
                         <th
                           key={d}
                           className={`sticky top-0 z-10 px-1 py-2 text-center text-[11px] font-medium border-b border-slate-100 ${
-                            future ? 'bg-slate-50 text-slate-300' : hol ? 'bg-blue-50 text-blue-600' : 'bg-slate-50/60 text-slate-500'
+                            future ? 'bg-slate-50 text-slate-300' : 'bg-slate-50/60 text-slate-500'
                           }`}
                           style={{ minWidth: '2.75rem' }}
                         >
@@ -457,18 +482,28 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
                       {dates.map((d) => {
                         const record = getRecord(d, emp.id);
                         const future = d > todayISO();
-                        const hol = isHolidayDate(d, settings.holidays);
                         return (
-                          <td key={d} className="px-1 py-1.5 text-center">
-                            <button
-                              type="button"
-                              disabled={future}
-                              onClick={() => cycleStatus(d, emp.id)}
-                              title={`${emp.name} · ${shortDateLabel(d)}${record.status ? ' · ' + attendanceStatusLabel(record.status) : ''}`}
-                              className={`w-8 h-8 mx-auto rounded-md border text-xs font-semibold flex items-center justify-center transition-colors ${gridCellClasses(record.status, hol, future)}`}
-                            >
-                              {gridCellLabel(record.status)}
-                            </button>
+                          <td key={d} className="px-1 py-1 text-center">
+                            <div className="w-8 mx-auto">
+                              <button
+                                type="button"
+                                disabled={future}
+                                onClick={() => cycleStatus(d, emp.id)}
+                                title={`${emp.name} · ${shortDateLabel(d)}${record.status ? ' · ' + attendanceStatusLabel(record.status) : ''}`}
+                                className={`w-8 h-7 rounded-t-md border text-xs font-semibold flex items-center justify-center transition-colors ${gridCellClasses(record.status, future)}`}
+                              >
+                                {gridCellLabel(record.status)}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={future || !otEditable(record.status)}
+                                onClick={() => cycleOt(d, emp.id)}
+                                title={`${emp.name} · ${shortDateLabel(d)} · OT ${otCellLabel(record.otCount)}`}
+                                className={`w-8 h-5 -mt-px rounded-b-md border text-[9px] font-medium flex items-center justify-center transition-colors ${otCellClasses(record.status, record.otCount, future)}`}
+                              >
+                                {otCellLabel(record.otCount)}
+                              </button>
+                            </div>
                           </td>
                         );
                       })}
@@ -556,7 +591,7 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
           weekAnchor={weekAnchor} changeWeekAnchor={changeWeekAnchor}
           month={month} changeMonth={changeMonth}
           employees={filteredEmployees}
-          attendance={attendance} setAttendance={setAttendance} settings={settings}
+          attendance={attendance} setAttendance={setAttendance}
           dirty={dirty} setDirty={setDirty} showToast={showToast}
         />
       )}

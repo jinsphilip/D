@@ -16,7 +16,7 @@ const STORAGE_KEYS = {
 const DEPARTMENTS = ['Operations', 'Engineering', 'Quality Control', 'Logistics', 'Administration'];
 const SITE_STATUSES = ['Active', 'On Hold', 'Completed'];
 const MESS_STATUSES = ['Active', 'Inactive'];
-const OT_LEVELS = [0, 0.5, 1.0];
+const OT_LEVELS = [0, 0.5, 1.0, 1.5];
 const ATTENDANCE_STATUSES = ['present', 'halfday', 'absent'];
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -334,7 +334,7 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   const halfDayDeduction = stats.halfDays * 0.5 * dailyRate;
   const totalDeductions = absentDeduction + halfDayDeduction;
 
-  // Each day's logged OT level (0.5x or 1.0x) is itself the fraction of a
+  // Each day's logged OT level (see OT_LEVELS) is itself the fraction of a
   // day's pay earned for that day's overtime — no separate multiplier.
   const otEarnings = stats.otUnits * dailyRate;
 

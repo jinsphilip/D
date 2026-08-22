@@ -4,7 +4,6 @@
 // this just keeps the app private to whoever the team shares the login
 // with, consistent with the rest of the app's "no per-user RBAC" scope.
 
-const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const db = require('./db');
 
@@ -16,6 +15,17 @@ const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
   console.error('SESSION_SECRET is not set. Set it to any long random string (see DEPLOY.md).');
   process.exit(1);
+}
+
+// Passwords are stored as plain text (by explicit request) rather than
+// hashed. Comparisons still go through a timing-safe check so the login
+// endpoint doesn't leak how much of the password was guessed correctly via
+// response-time differences.
+function passwordsMatch(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 async function ensureAdminSeeded() {
@@ -32,24 +42,21 @@ async function ensureAdminSeeded() {
     process.exit(1);
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  await db.setValue(AUTH_KEY, { username, passwordHash });
+  await db.setValue(AUTH_KEY, { username, password });
   console.log(`Bootstrapped login for user "${username}" from ADMIN_USERNAME/ADMIN_PASSWORD.`);
 }
 
 async function verifyLogin(username, password) {
   const auth = await db.getValue(AUTH_KEY);
   if (!auth || auth.username !== username) return false;
-  return bcrypt.compare(password, auth.passwordHash);
+  return passwordsMatch(password, auth.password);
 }
 
 async function changePassword(currentPassword, newPassword) {
   const auth = await db.getValue(AUTH_KEY);
   if (!auth) throw new Error('No login is configured');
-  const ok = await bcrypt.compare(currentPassword, auth.passwordHash);
-  if (!ok) return false;
-  const passwordHash = await bcrypt.hash(newPassword, 10);
-  await db.setValue(AUTH_KEY, { ...auth, passwordHash });
+  if (!passwordsMatch(currentPassword, auth.password)) return false;
+  await db.setValue(AUTH_KEY, { ...auth, password: newPassword });
   return true;
 }
 

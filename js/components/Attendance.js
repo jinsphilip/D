@@ -1,18 +1,24 @@
-function OtSelector({ value, onChange }) {
+// No explicit "None" pill — clicking the already-active level clears it back
+// to no-OT, same interaction as the grid's OT buttons.
+function OtSelector({ value, onChange, disabled }) {
   return (
     <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden">
-      {OT_LEVELS.map((level) => (
-        <button
-          key={level}
-          type="button"
-          onClick={() => onChange(level)}
-          className={`px-2.5 py-1.5 text-xs font-medium touch-target transition-colors ${
-            Number(value) === level ? 'bg-violet-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
-          } ${level !== 0 ? 'border-l border-slate-300' : ''}`}
-        >
-          {level === 0 ? 'None' : `${level.toFixed(1)}x`}
-        </button>
-      ))}
+      {OT_LEVELS.map((level, i) => {
+        const active = Number(value) === level;
+        return (
+          <button
+            key={level}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(active ? 0 : level)}
+            className={`px-2.5 py-1.5 text-xs font-medium touch-target transition-colors ${i > 0 ? 'border-l border-slate-300' : ''} ${
+              disabled ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : active ? 'bg-violet-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {level.toFixed(1)}x
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -81,7 +87,7 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
     setChanges((prev) => {
       const current = recordFromChanges(prev, empId);
       const next = { ...current, ...patch };
-      if (next.status === 'absent') next.otCount = 0; // no OT on a day not worked
+      if (next.status !== 'present') next.otCount = 0; // OT only applies to a day marked Present
       return { ...prev, [empId]: next };
     });
     setDirty(true);
@@ -182,7 +188,7 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
                   </div>
                   <div>
                     <p className="text-xs font-medium text-slate-500 mb-1.5">OT Shift</p>
-                    <OtSelector value={record.otCount} onChange={(v) => updateRecord(emp.id, { otCount: v })} />
+                    <OtSelector value={record.otCount} onChange={(v) => updateRecord(emp.id, { otCount: v })} disabled={record.status !== 'present'} />
                     {Number(record.otCount) > 0 && (
                       <p className="text-xs text-violet-600 mt-1.5 font-medium">
                         + {formatCurrency(otPreview(emp, record.otCount), settings.currency)} OT earnings
@@ -230,7 +236,7 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
                           <StatusSelector value={record.status} onChange={(v) => updateRecord(emp.id, { status: v })} />
                         </td>
                         <td className="px-4 py-3">
-                          <OtSelector value={record.otCount} onChange={(v) => updateRecord(emp.id, { otCount: v })} />
+                          <OtSelector value={record.otCount} onChange={(v) => updateRecord(emp.id, { otCount: v })} disabled={record.status !== 'present'} />
                         </td>
                         <td className="px-4 py-3">
                           {Number(record.otCount) > 0 ? (
@@ -279,15 +285,16 @@ function gridCellLabel(status) {
   return '';
 }
 
-// OT is only meaningful on a day actually worked.
+// OT only applies to a day actually marked Present — not Half Day, not
+// Absent, not unmarked.
 function otEditable(status) {
-  return status === 'present' || status === 'halfday';
+  return status === 'present';
 }
 
-// The 3 non-zero OT levels, shown as individually clickable buttons in the
-// grid (rather than a single cycling swatch) so all options are visible at
-// once, same spirit as DayView's OtSelector pills.
-const GRID_OT_LEVELS = OT_LEVELS.filter((l) => l > 0);
+// The OT levels, shown as individually clickable buttons in the grid
+// (rather than a single cycling swatch) so all options are visible at once,
+// same spirit as DayView's OtSelector pills.
+const GRID_OT_LEVELS = OT_LEVELS;
 
 function otButtonClasses(active, disabled) {
   if (disabled) return 'bg-slate-50 text-slate-200 border-slate-100 cursor-not-allowed';
@@ -298,16 +305,16 @@ function otButtonClasses(active, disabled) {
 
 // Week/Month attendance grid: rows = employees, columns = every date in the
 // visible range. Each cell has a status swatch on top (click cycles None ->
-// Present -> Half Day -> Absent -> None) and, below it, three OT buttons —
-// 0.5x / 1x / 1.5x — any of which can be clicked directly to set that day's
+// Present -> Half Day -> Absent -> None) and, below it, OT buttons — one per
+// OT_LEVELS entry — any of which can be clicked directly to set that day's
 // OT (click the active one again to clear it back to none); OT only applies
-// while the day is marked Present/Half Day. "Mark Shown Present/Absent"
-// bulk-applies to every non-future day in the range for the currently
-// listed employees — Sundays and Settings holidays are not treated
-// specially here, same as every other day. Like DayView, edits are a sparse
-// overlay on top of the live `attendance` prop (only touched employee+date
-// pairs are tracked), so saving merges just those pairs into the freshest
-// server state instead of overwriting whole dates.
+// while the day is marked Present. "Mark Shown Present/Absent" bulk-applies
+// to every non-future day in the range for the currently listed employees —
+// Sundays and Settings holidays are not treated specially here, same as
+// every other day. Like DayView, edits are a sparse overlay on top of the
+// live `attendance` prop (only touched employee+date pairs are tracked), so
+// saving merges just those pairs into the freshest server state instead of
+// overwriting whole dates.
 function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth, employees, attendance, setAttendance, dirty, setDirty, showToast }) {
   const dates = mode === 'week' ? datesInRange(startOfWeek(weekAnchor), 7) : datesInMonth(month);
   const rangeKey = `${mode}_${dates[0]}_${dates[dates.length - 1]}`;
@@ -336,7 +343,7 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
     const current = getRecord(date, empId);
     const idx = STATUS_CYCLE.indexOf(current.status);
     const nextStatus = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
-    const nextRecord = nextStatus ? { ...current, status: nextStatus, otCount: nextStatus === 'absent' ? 0 : current.otCount } : null;
+    const nextRecord = nextStatus ? { ...current, status: nextStatus, otCount: nextStatus === 'present' ? current.otCount : 0 } : null;
     setChanges((prev) => ({ ...prev, [date]: { ...(prev[date] || {}), [empId]: nextRecord } }));
     setDirty(true);
   };
@@ -361,7 +368,7 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
         const dayChanges = { ...(next[date] || {}) };
         employees.forEach((emp) => {
           const current = recordFromChanges(prev, date, emp.id);
-          dayChanges[emp.id] = { ...current, status, otCount: status === 'absent' ? 0 : current.otCount };
+          dayChanges[emp.id] = { ...current, status, otCount: status === 'present' ? current.otCount : 0 };
         });
         next[date] = dayChanges;
       });
@@ -444,7 +451,7 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-400 inline-block"></span> Half Day</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-rose-500 inline-block"></span> Absent</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-violet-600 inline-block"></span> OT marked</span>
-            <span>Top of a cell cycles status; the three buttons below pick OT — 0.5x / 1x / 1.5x (Present/Half Day only).</span>
+            <span>Top of a cell cycles status; the buttons below pick OT — 0.5x / 1x / 1.5x / 2x (Present only).</span>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -463,7 +470,7 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
                           className={`sticky top-0 z-10 px-1 py-2 text-center text-[11px] font-medium border-b border-slate-100 ${
                             future ? 'bg-slate-50 text-slate-300' : 'bg-slate-50/60 text-slate-500'
                           }`}
-                          style={{ minWidth: '4.5rem' }}
+                          style={{ minWidth: '5.5rem' }}
                         >
                           {shortDateLabel(d)}
                         </th>
@@ -484,13 +491,13 @@ function RangeGridView({ mode, weekAnchor, changeWeekAnchor, month, changeMonth,
                         const otDisabled = future || !otEditable(record.status);
                         return (
                           <td key={d} className="px-1 py-1 text-center">
-                            <div className="w-16 mx-auto">
+                            <div className="w-20 mx-auto">
                               <button
                                 type="button"
                                 disabled={future}
                                 onClick={() => cycleStatus(d, emp.id)}
                                 title={`${emp.name} · ${shortDateLabel(d)}${record.status ? ' · ' + attendanceStatusLabel(record.status) : ''}`}
-                                className={`w-16 h-7 rounded-t-md border text-xs font-semibold flex items-center justify-center transition-colors ${gridCellClasses(record.status, future)}`}
+                                className={`w-20 h-7 rounded-t-md border text-xs font-semibold flex items-center justify-center transition-colors ${gridCellClasses(record.status, future)}`}
                               >
                                 {gridCellLabel(record.status)}
                               </button>

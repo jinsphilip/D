@@ -16,7 +16,7 @@ const STORAGE_KEYS = {
 const DEPARTMENTS = ['Operations', 'Engineering', 'Quality Control', 'Logistics', 'Administration'];
 const SITE_STATUSES = ['Active', 'On Hold', 'Completed'];
 const MESS_STATUSES = ['Active', 'Inactive'];
-const OT_LEVELS = [0, 0.5, 1.0, 1.5];
+const OT_LEVELS = [0.5, 1.0, 1.5, 2.0];
 const ATTENDANCE_STATUSES = ['present', 'halfday', 'absent'];
 
 function pad2(n) { return String(n).padStart(2, '0'); }

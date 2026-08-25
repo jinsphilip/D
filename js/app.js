@@ -98,6 +98,7 @@ function AuthenticatedApp({ username, onLogout }) {
   const [messes, setMesses, messesErr] = useServerState(STORAGE_KEYS.messes, seedMesses);
   const [messExpenses, setMessExpenses, messExpensesErr] = useServerState(STORAGE_KEYS.messExpenses, seedMessExpenses);
   const [advances, setAdvances, advancesErr] = useServerState(STORAGE_KEYS.advances, seedAdvances);
+  const [salaryRevisions, setSalaryRevisions, salaryRevisionsErr] = useServerState(STORAGE_KEYS.salaryRevisions, seedSalaryRevisions);
 
   const [tab, setTab] = React.useState('dashboard');
   const [siteFilter, setSiteFilter] = React.useState('all');
@@ -110,10 +111,10 @@ function AuthenticatedApp({ username, onLogout }) {
 
   const navigate = (key) => { setTab(key); setMobileNavOpen(false); };
 
-  const firstError = sitesErr || employeesErr || attendanceErr || settingsErr || messesErr || messExpensesErr || advancesErr;
+  const firstError = sitesErr || employeesErr || attendanceErr || settingsErr || messesErr || messExpensesErr || advancesErr || salaryRevisionsErr;
   if (firstError) return <ServerErrorScreen message={firstError} />;
 
-  const stillLoading = [sites, employees, attendance, settings, messes, messExpenses, advances].some((v) => v === null);
+  const stillLoading = [sites, employees, attendance, settings, messes, messExpenses, advances, salaryRevisions].some((v) => v === null);
   if (stillLoading) return <LoadingScreen />;
 
   let content = null;
@@ -121,7 +122,7 @@ function AuthenticatedApp({ username, onLogout }) {
     content = (
       <Dashboard
         sites={sites} employees={employees} attendance={attendance} settings={settings}
-        messExpenses={messExpenses} advances={advances}
+        messExpenses={messExpenses} advances={advances} salaryRevisions={salaryRevisions}
         siteFilter={siteFilter} setSiteFilter={setSiteFilter} onNavigate={navigate}
       />
     );
@@ -134,11 +135,15 @@ function AuthenticatedApp({ username, onLogout }) {
       <AttendanceModule
         employees={employees} sites={sites} attendance={attendance} setAttendance={setAttendance}
         settings={settings} siteFilter={siteFilter} setSiteFilter={setSiteFilter} showToast={showToast}
+        salaryRevisions={salaryRevisions}
       />
     );
   } else if (tab === 'employees') {
     content = (
-      <EmployeesModule employees={employees} setEmployees={setEmployees} sites={sites} messes={messes} settings={settings} showToast={showToast} />
+      <EmployeesModule
+        employees={employees} setEmployees={setEmployees} sites={sites} messes={messes} settings={settings} showToast={showToast}
+        salaryRevisions={salaryRevisions} setSalaryRevisions={setSalaryRevisions}
+      />
     );
   } else if (tab === 'payroll') {
     content = (
@@ -146,6 +151,7 @@ function AuthenticatedApp({ username, onLogout }) {
         employees={employees} sites={sites} messes={messes} messExpenses={messExpenses} advances={advances}
         attendance={attendance} settings={settings}
         siteFilter={siteFilter} setSiteFilter={setSiteFilter}
+        salaryRevisions={salaryRevisions}
       />
     );
   } else if (tab === 'mess') {

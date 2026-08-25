@@ -72,6 +72,12 @@ function seedAdvances() {
   ];
 }
 
+function seedSalaryRevisions() {
+  return [
+    { id: uid('SAL'), employeeId: 'EMP101', effectiveMonth: currentMonthStr(), newSalary: 48000, note: 'Annual performance increment' },
+  ];
+}
+
 function seedAttendance() {
   const today = todayISO();
   return {
@@ -106,5 +112,6 @@ module.exports = function seedStore() {
     nep_messes: seedMesses(),
     nep_mess_expenses: seedMessExpenses(),
     nep_advances: seedAdvances(),
+    nep_salary_revisions: seedSalaryRevisions(),
   };
 };

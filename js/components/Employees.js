@@ -51,7 +51,7 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
         <Field label="Designation / Role">
           <input className={inputClass} value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} placeholder="e.g. Site Engineer" required />
         </Field>
-        <Field label="Base Monthly Salary">
+        <Field label="Base Monthly Salary" hint={isEdit ? 'Salary in effect before this employee\'s first recorded hike — use Salary History to record raises' : undefined}>
           <input type="number" min="0" step="0.01" className={inputClass} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: e.target.value })} required />
         </Field>
         <Field label="Phone Number">
@@ -87,8 +87,129 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
   );
 }
 
-function EmployeesModule({ employees, setEmployees, sites, messes, settings, showToast }) {
+// Records dated salary hikes for one employee and shows their history.
+// Payroll for a given month resolves the salary via getSalaryForMonth: the
+// most recent revision whose effectiveMonth has arrived, falling back to
+// employee.baseSalary if none apply yet — so this never rewrites baseSalary
+// itself, and past payroll stays untouched by a later hike.
+function SalaryHistoryModal({ employee, salaryRevisions, setSalaryRevisions, settings, showToast, onClose }) {
+  const blankForm = () => ({ newSalary: '', effectiveMonth: currentMonthStr(), note: '' });
+  const [form, setForm] = React.useState(blankForm());
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
+
+  const history = getSalaryRevisionsForEmployee(employee.id, salaryRevisions);
+  const currentSalary = getSalaryForMonth(employee, currentMonthStr(), salaryRevisions);
+  const isEdit = !!form.id;
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!form.newSalary || Number(form.newSalary) <= 0 || !form.effectiveMonth) return;
+    if (isEdit) {
+      setSalaryRevisions(salaryRevisions.map((r) => (r.id === form.id ? { ...r, ...form, newSalary: Number(form.newSalary) } : r)));
+      showToast('Salary revision updated');
+    } else {
+      setSalaryRevisions([...salaryRevisions, { ...form, id: uid('SAL'), employeeId: employee.id, newSalary: Number(form.newSalary) }]);
+      showToast('Salary hike recorded');
+    }
+    setForm(blankForm());
+  };
+
+  const editRevision = (r) => setForm({ id: r.id, newSalary: String(r.newSalary), effectiveMonth: r.effectiveMonth, note: r.note || '' });
+
+  const confirmDelete = () => {
+    setSalaryRevisions(salaryRevisions.filter((r) => r.id !== deleteTarget.id));
+    showToast('Salary revision removed');
+    setDeleteTarget(null);
+  };
+
+  return (
+    <Modal title={`Salary History · ${employee.name}`} onClose={onClose} wide>
+      <div className="space-y-5">
+        <div className="bg-slate-50 rounded-lg p-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400">Current Effective Salary</p>
+            <p className="text-lg font-bold text-slate-900">{formatCurrency(currentSalary, settings.currency)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-slate-400">Starting Base Salary</p>
+            <p className="text-sm font-medium text-slate-600">{formatCurrency(employee.baseSalary, settings.currency)}</p>
+          </div>
+        </div>
+
+        <form onSubmit={submit} className="grid sm:grid-cols-3 gap-3 items-end">
+          <Field label="New Salary">
+            <input type="number" min="0.01" step="0.01" className={inputClass} value={form.newSalary} onChange={(e) => setForm({ ...form, newSalary: e.target.value })} required />
+          </Field>
+          <Field label="Effective Month">
+            <input type="month" className={inputClass} value={form.effectiveMonth} onChange={(e) => setForm({ ...form, effectiveMonth: e.target.value })} required />
+          </Field>
+          <Field label="Note" hint="Optional">
+            <input className={inputClass} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. Annual increment" />
+          </Field>
+          <div className="sm:col-span-3 flex justify-end gap-2">
+            {isEdit && <Button type="button" variant="secondary" onClick={() => setForm(blankForm())}>Cancel Edit</Button>}
+            <Button type="submit"><Icon name="trending-up" className="w-4 h-4" /> {isEdit ? 'Save Changes' : 'Record Hike'}</Button>
+          </div>
+        </form>
+
+        {history.length === 0 ? (
+          <EmptyState icon="trending-up" title="No hikes recorded yet" message="Record one above to start this employee's salary history." />
+        ) : (
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50/60">
+                  <th className="px-3 py-2 font-medium">Effective Month</th>
+                  <th className="px-3 py-2 font-medium">New Salary</th>
+                  <th className="px-3 py-2 font-medium">Note</th>
+                  <th className="px-3 py-2 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((r) => (
+                  <tr key={r.id} className="border-b border-slate-50 last:border-0">
+                    <td className="px-3 py-2 text-slate-700">
+                      <div className="flex items-center gap-2">
+                        <span>{monthLabel(r.effectiveMonth)}</span>
+                        {r.effectiveMonth > currentMonthStr() && <Badge tone="blue">Future</Badge>}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 font-medium text-slate-800">{formatCurrency(r.newSalary, settings.currency)}</td>
+                    <td className="px-3 py-2 text-slate-500 max-w-[160px] truncate">{r.note || '—'}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" className="!px-2" onClick={() => editRevision(r)}>
+                          <Icon name="pencil" className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" className="!px-2 text-rose-500 hover:bg-rose-50" onClick={() => setDeleteTarget(r)}>
+                          <Icon name="trash-2" className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Delete Salary Revision"
+          message={`Remove the ${formatCurrency(deleteTarget.newSalary, settings.currency)} revision effective ${monthLabel(deleteTarget.effectiveMonth)}?`}
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function EmployeesModule({ employees, setEmployees, sites, messes, settings, salaryRevisions, setSalaryRevisions, showToast }) {
   const [formEmp, setFormEmp] = React.useState(null);
+  const [historyEmp, setHistoryEmp] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [search, setSearch] = React.useState('');
   const [deptFilter, setDeptFilter] = React.useState('all');
@@ -162,7 +283,7 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sho
                 <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50/60">
                   <th className="px-4 py-2.5 font-medium">Employee</th>
                   <th className="px-4 py-2.5 font-medium">Department / Role</th>
-                  <th className="px-4 py-2.5 font-medium">Base Salary</th>
+                  <th className="px-4 py-2.5 font-medium">Current Salary</th>
                   <th className="px-4 py-2.5 font-medium">Site</th>
                   <th className="px-4 py-2.5 font-medium">Mess</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
@@ -170,7 +291,9 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sho
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((emp) => (
+                {filtered.map((emp) => {
+                  const currentSalary = getSalaryForMonth(emp, currentMonthStr(), salaryRevisions);
+                  return (
                   <tr key={emp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-800">{emp.name}</div>
@@ -180,7 +303,12 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sho
                       <div className="text-slate-700">{emp.department}</div>
                       <div className="text-xs text-slate-400">{emp.designation}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-700">{formatCurrency(emp.baseSalary, settings.currency)}</td>
+                    <td className="px-4 py-3 text-slate-700">
+                      <div>{formatCurrency(currentSalary, settings.currency)}</div>
+                      {currentSalary !== emp.baseSalary && (
+                        <div className="text-xs text-slate-400">Base: {formatCurrency(emp.baseSalary, settings.currency)}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <select
                         className={selectClass + ' !py-1.5 text-xs min-w-[150px]'}
@@ -206,6 +334,9 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sho
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" className="!px-2" onClick={() => setHistoryEmp(emp)} aria-label="Salary History">
+                          <Icon name="trending-up" className="w-4 h-4" />
+                        </Button>
                         <Button variant="ghost" className="!px-2" onClick={() => setFormEmp(emp)}>
                           <Icon name="pencil" className="w-4 h-4" />
                         </Button>
@@ -215,7 +346,8 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sho
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -224,6 +356,12 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sho
 
       {formEmp !== null && (
         <EmployeeForm employee={formEmp.id ? formEmp : null} sites={sites} messes={messes} employees={employees} onSave={saveEmployee} onClose={() => setFormEmp(null)} />
+      )}
+      {historyEmp && (
+        <SalaryHistoryModal
+          employee={historyEmp} salaryRevisions={salaryRevisions} setSalaryRevisions={setSalaryRevisions}
+          settings={settings} showToast={showToast} onClose={() => setHistoryEmp(null)}
+        />
       )}
       {deleteTarget && (
         <ConfirmDialog

@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   messes: 'nep_messes',
   messExpenses: 'nep_mess_expenses',
   advances: 'nep_advances',
+  salaryRevisions: 'nep_salary_revisions',
 };
 
 const DEPARTMENTS = ['Operations', 'Engineering', 'Quality Control', 'Logistics', 'Administration'];
@@ -122,6 +123,12 @@ function seedMessExpenses() {
 function seedAdvances() {
   return [
     { id: uid('ADV'), employeeId: 'EMP101', amount: 5000, dateGiven: prevMonthStr(currentMonthStr()) + '-10', note: 'Family emergency' },
+  ];
+}
+
+function seedSalaryRevisions() {
+  return [
+    { id: uid('SAL'), employeeId: 'EMP101', effectiveMonth: currentMonthStr(), newSalary: 48000, note: 'Annual performance increment' },
   ];
 }
 
@@ -355,16 +362,41 @@ function getAdvanceStatus(advance, referenceMonthStr) {
   return 'upcoming';
 }
 
+// An employee's salary revisions (hikes), most-recently-effective first.
+// Ties on the same effectiveMonth break by id, which embeds a creation
+// timestamp (see uid()), so the most recently recorded one wins.
+function getSalaryRevisionsForEmployee(employeeId, salaryRevisions) {
+  return (salaryRevisions || [])
+    .filter((r) => r.employeeId === employeeId)
+    .sort((a, b) => (a.effectiveMonth === b.effectiveMonth ? (a.id < b.id ? 1 : -1) : (a.effectiveMonth < b.effectiveMonth ? 1 : -1)));
+}
+
+// The salary in effect for employeeId during monthStr: the newSalary of the
+// most recent revision whose effectiveMonth has arrived by monthStr, or the
+// employee's baseSalary if no revision applies yet — i.e. baseSalary is the
+// salary in effect before the first recorded hike, not necessarily "current."
+function getSalaryForMonth(employee, monthStr, salaryRevisions) {
+  const applicable = getSalaryRevisionsForEmployee(employee.id, salaryRevisions).filter((r) => r.effectiveMonth <= monthStr);
+  return applicable.length ? applicable[0].newSalary : employee.baseSalary;
+}
+
 // Full payroll computation for one employee for one month, per spec formulas.
-// `extras` carries cross-entity context needed for mess fees and advance
-// recovery: { employees, messExpenses, advances }.
+// `extras` carries cross-entity context needed for mess fees, advance
+// recovery and historical salary resolution: { employees, messExpenses,
+// advances, salaryRevisions }.
 function calculateEmployeePayroll(employee, monthStr, attendance, settings, extras) {
   extras = extras || {};
   const messExpenses = extras.messExpenses || {};
   const advances = extras.advances || [];
+  const salaryRevisions = extras.salaryRevisions || [];
+
+  // The salary actually in effect for this month — not necessarily the
+  // employee's current baseSalary — so past months stay unaffected by a
+  // later hike and a hike only applies from its effective month onward.
+  const effectiveSalary = getSalaryForMonth(employee, monthStr, salaryRevisions);
 
   const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode, settings.holidays);
-  const dailyRate = workingDays > 0 ? employee.baseSalary / workingDays : 0;
+  const dailyRate = workingDays > 0 ? effectiveSalary / workingDays : 0;
   const stats = getMonthAttendanceStats(employee.id, monthStr, attendance, settings.holidays);
 
   const absentDeduction = stats.absentDays * dailyRate;
@@ -381,7 +413,7 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   const advanceDeduction = appliedAdvances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
   const grandTotalDeductions = totalDeductions + messDeduction + advanceDeduction;
-  const netPayable = Math.max(0, employee.baseSalary - grandTotalDeductions + otEarnings);
+  const netPayable = Math.max(0, effectiveSalary - grandTotalDeductions + otEarnings);
 
   return {
     workingDays,
@@ -395,7 +427,10 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
     appliedAdvances,
     advanceDeduction,
     grandTotalDeductions,
-    baseSalary: employee.baseSalary,
+    // The salary actually effective for monthStr, not employee.baseSalary --
+    // kept under this field name since Payslip.js/Payroll.js already just
+    // display whatever this returns.
+    baseSalary: effectiveSalary,
     netPayable,
   };
 }

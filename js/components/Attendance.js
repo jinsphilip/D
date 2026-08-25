@@ -62,7 +62,7 @@ const STATUS_CYCLE = [undefined, 'present', 'halfday', 'absent'];
 // up by background polling) and saving never clobbers another user's
 // concurrent edit to a *different* employee on the same date — only the
 // employees this session actually changed are merged in.
-function DayView({ date, changeDate, employees, sites, siteName, attendance, setAttendance, settings, dirty, setDirty, showToast }) {
+function DayView({ date, changeDate, employees, sites, siteName, attendance, setAttendance, settings, salaryRevisions, dirty, setDirty, showToast }) {
   const [changes, setChanges] = React.useState({});
 
   React.useEffect(() => {
@@ -133,7 +133,7 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
   };
 
   const otPreview = (emp, otCount) => {
-    const dailyRate = workingDays > 0 ? emp.baseSalary / workingDays : 0;
+    const dailyRate = workingDays > 0 ? getSalaryForMonth(emp, monthStr, salaryRevisions) / workingDays : 0;
     return Number(otCount || 0) * dailyRate;
   };
 
@@ -542,7 +542,7 @@ const ATTENDANCE_VIEW_MODES = [
   { key: 'month', label: 'Month' },
 ];
 
-function AttendanceModule({ employees, sites, attendance, setAttendance, settings, siteFilter, setSiteFilter, showToast }) {
+function AttendanceModule({ employees, sites, attendance, setAttendance, settings, salaryRevisions, siteFilter, setSiteFilter, showToast }) {
   const [viewMode, setViewMode] = React.useState('day');
   const [date, setDate] = React.useState(todayISO());
   const [weekAnchor, setWeekAnchor] = React.useState(todayISO());
@@ -598,7 +598,7 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
       {viewMode === 'day' && (
         <DayView
           date={date} changeDate={changeDate} employees={filteredEmployees} sites={sites} siteName={siteName}
-          attendance={attendance} setAttendance={setAttendance} settings={settings}
+          attendance={attendance} setAttendance={setAttendance} settings={settings} salaryRevisions={salaryRevisions}
           dirty={dirty} setDirty={setDirty} showToast={showToast}
         />
       )}

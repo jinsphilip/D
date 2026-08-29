@@ -74,7 +74,7 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
   const monthStr = date.slice(0, 7);
   const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode, settings.holidays);
   const holiday = isHolidayDate(date, settings.holidays);
-  const holidayName = isSunday(date) ? 'Sunday' : ((settings.holidays || []).find((h) => h.date === date) || {}).name || 'Holiday';
+  const holidayName = ((settings.holidays || []).find((h) => h.date === date) || {}).name || 'Holiday';
 
   const recordFromChanges = (changesObj, empId) => {
     const override = changesObj[empId];

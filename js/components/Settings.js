@@ -95,8 +95,9 @@ function HolidaysSection({ holidays, onChange }) {
           <Icon name="calendar-off" className="w-4 h-4 text-brand-600" /> Holidays
         </h3>
         <p className="text-xs text-slate-400 mt-1">
-          Every Sunday is automatically a holiday. Add any other non-working days (public holidays,
-          festivals, etc.) below — none of these count as absent when left unmarked in Attendance.
+          Sundays are ordinary working days by default — add a specific Sunday here too if you want
+          it off. Dates listed below (public holidays, festivals, weekly offs, etc.) don't count as
+          absent when left unmarked in Attendance.
         </p>
       </div>
 
@@ -157,9 +158,9 @@ function SettingsModule({ settings, setSettings, showToast, username }) {
   };
 
   const modes = [
-    { key: '26', label: 'Standard 26 Days', hint: 'Excludes 4 Sundays' },
+    { key: '26', label: 'Standard 26 Days', hint: 'Flat 26-day baseline, regardless of listed holidays' },
     { key: '30', label: 'Fixed 30 Days', hint: 'Flat month length' },
-    { key: 'actual', label: 'Actual Calendar Days', hint: 'Excludes Sundays & holidays dynamically' },
+    { key: 'actual', label: 'Actual Calendar Days', hint: 'Excludes only the holidays listed below' },
   ];
 
   return (

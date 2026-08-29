@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { key: 'mess', label: 'Mess', icon: 'utensils' },
   { key: 'advances', label: 'Advances', icon: 'hand-coins' },
   { key: 'travel', label: 'Travel', icon: 'plane' },
+  { key: 'reports', label: 'Reports', icon: 'file-bar-chart' },
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -174,6 +175,14 @@ function AuthenticatedApp({ username, onLogout }) {
   } else if (tab === 'travel') {
     content = (
       <TravelModule employees={employees} travelRecords={travelRecords} setTravelRecords={setTravelRecords} settings={settings} showToast={showToast} />
+    );
+  } else if (tab === 'reports') {
+    content = (
+      <ReportsModule
+        employees={employees} sites={sites} messes={messes} attendance={attendance} settings={settings}
+        messExpenses={messExpenses} advances={advances} salaryRevisions={salaryRevisions} travelRecords={travelRecords}
+        showToast={showToast}
+      />
     );
   } else if (tab === 'settings') {
     content = <SettingsModule settings={settings} setSettings={setSettings} showToast={showToast} username={username} />;

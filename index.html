@@ -39,7 +39,12 @@
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 <script src="https://unpkg.com/lucide@1/dist/umd/lucide.js"></script>
 
-<link rel="stylesheet" href="css/styles.css?v=14" />
+<!-- Reports export: SheetJS for Excel, jsPDF + autoTable for PDF -->
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf-autotable.min.js"></script>
+
+<link rel="stylesheet" href="css/styles.css?v=15" />
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
 
@@ -50,20 +55,21 @@
      extra blank pages. -->
 <div id="print-root"></div>
 
-<script type="text/babel" data-presets="react" src="js/utils.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Common.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Auth.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Dashboard.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Sites.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Mess.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Attendance.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Employees.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Advances.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Travel.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Payslip.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Payroll.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/components/Settings.js?v=14"></script>
-<script type="text/babel" data-presets="react" src="js/app.js?v=14"></script>
+<script type="text/babel" data-presets="react" src="js/utils.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Common.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Auth.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Dashboard.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Sites.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Mess.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Attendance.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Employees.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Advances.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Travel.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Reports.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Payslip.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Payroll.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/components/Settings.js?v=15"></script>
+<script type="text/babel" data-presets="react" src="js/app.js?v=15"></script>
 
 </body>
 </html>

@@ -304,14 +304,13 @@ function getWorkingDaysInMonth(monthStr, mode, holidays) {
 }
 
 // Aggregate an employee's attendance stats for a given YYYY-MM month.
-// A day with no attendance record at all defaults to absent (no pay) — but
-// only once that day has actually finished. Today stays uncounted until
-// it's explicitly marked (gives the site manager the rest of the day to
-// log it) instead of being pre-emptively docked as absent at 9am; future
-// days are never counted either way.
+// A day with no attendance record at all defaults to absent (no pay) —
+// unmarked is treated as worst-case by default, whether the day is in the
+// past, today, or later this month, so net payable reflects $0 until
+// attendance is actually logged rather than silently paying out for days
+// nobody has marked yet.
 function getMonthAttendanceStats(employeeId, monthStr, attendance, holidays, travelRecords) {
   const totalDaysInMonth = daysInCalendarMonth(monthStr);
-  const todayStr = todayISO();
 
   let presentDays = 0, halfDays = 0, absentDays = 0, otUnits = 0, loggedDays = 0;
   for (let d = 1; d <= totalDaysInMonth; d++) {
@@ -323,14 +322,12 @@ function getMonthAttendanceStats(employeeId, monthStr, attendance, holidays, tra
       else if (record.status === 'halfday') halfDays++;
       else if (record.status === 'absent') absentDays++;
       otUnits += Number(record.otCount) || 0;
-    } else if (dateKey < todayStr && !isHolidayDate(dateKey, holidays) && !isOnApprovedTravel(employeeId, dateKey, travelRecords)) {
-      absentDays++; // day already passed with nothing logged -> defaults to absent
+    } else if (!isHolidayDate(dateKey, holidays) && !isOnApprovedTravel(employeeId, dateKey, travelRecords)) {
+      // Only dates explicitly listed in Settings (or covered by approved
+      // travel) skip the default-absent deduction when left unmarked — a
+      // Sunday is an ordinary day unless it's been added to that list.
+      absentDays++;
     }
-    // Only dates explicitly listed in Settings (or covered by approved
-    // travel) skip the default-absent deduction when left unmarked — a
-    // Sunday is an ordinary day unless it's been added to that list, so it
-    // defaults to absent just like any other unmarked day (unless someone
-    // was explicitly logged as having worked it, handled above).
   }
   return { presentDays, halfDays, absentDays, otUnits, loggedDays };
 }

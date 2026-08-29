@@ -303,14 +303,29 @@ function getWorkingDaysInMonth(monthStr, mode, holidays) {
   return 26; // Standard 26-day mode (default)
 }
 
+// A fixed 26/30-day pay period only has that many chargeable days,
+// regardless of how many days the real calendar month has — so a 31-day
+// month under "Fixed 30 Days" mode must stop counting at day 30, not walk
+// all 31 real days. Otherwise an employee present on just one day near the
+// end of a long month can rack up more absent-day deductions than the
+// mode's own daily-rate divisor accounts for, wiping out the entire base
+// salary instead of just the days actually missed. "Actual Calendar Days"
+// mode has no such mismatch — its divisor already equals the real month
+// length — so it isn't capped here.
+function attendanceDayCap(monthStr, mode) {
+  const total = daysInCalendarMonth(monthStr);
+  if (mode === 'actual') return total;
+  return Math.min(total, mode === '30' ? 30 : 26);
+}
+
 // Aggregate an employee's attendance stats for a given YYYY-MM month.
 // A day with no attendance record at all defaults to absent (no pay) —
 // unmarked is treated as worst-case by default, whether the day is in the
 // past, today, or later this month, so net payable reflects $0 until
 // attendance is actually logged rather than silently paying out for days
 // nobody has marked yet.
-function getMonthAttendanceStats(employeeId, monthStr, attendance, holidays, travelRecords) {
-  const totalDaysInMonth = daysInCalendarMonth(monthStr);
+function getMonthAttendanceStats(employeeId, monthStr, attendance, mode, holidays, travelRecords) {
+  const totalDaysInMonth = attendanceDayCap(monthStr, mode);
 
   let presentDays = 0, halfDays = 0, absentDays = 0, otUnits = 0, loggedDays = 0;
   for (let d = 1; d <= totalDaysInMonth; d++) {
@@ -402,7 +417,7 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
 
   const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode, settings.holidays);
   const dailyRate = workingDays > 0 ? effectiveSalary / workingDays : 0;
-  const stats = getMonthAttendanceStats(employee.id, monthStr, attendance, settings.holidays, travelRecords);
+  const stats = getMonthAttendanceStats(employee.id, monthStr, attendance, settings.daysInMonthMode, settings.holidays, travelRecords);
 
   const absentDeduction = stats.absentDays * dailyRate;
   const halfDayDeduction = stats.halfDays * 0.5 * dailyRate;

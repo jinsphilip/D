@@ -45,7 +45,7 @@ const REPORT_TYPES = {
       { key: 'payableDays', label: 'Payable Days', align: 'right' },
     ],
     buildRows: (ctx) => filterReportEmployees(ctx.employees, ctx.siteId, ctx.role, true).map((emp) => {
-      const stats = getMonthAttendanceStats(emp.id, ctx.month, ctx.attendance, ctx.settings.holidays, ctx.travelRecords);
+      const stats = getMonthAttendanceStats(emp.id, ctx.month, ctx.attendance, ctx.settings.daysInMonthMode, ctx.settings.holidays, ctx.travelRecords);
       const [year, monthNum] = ctx.month.split('-').map(Number);
       return {
         id: emp.id, name: emp.name, designation: emp.designation, siteName: reportSiteName(ctx.sites, emp.siteId),

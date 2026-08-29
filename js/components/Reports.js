@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Reports — read-only cross-entity views of the data, exportable to Excel
-// (SheetJS/XLSX) and PDF (jsPDF + autoTable). Both libraries are loaded via
-// <script> tags in index.html, same as React/Babel/Lucide.
+// (SheetJS/XLSX, loaded via <script> in index.html) or sent to the browser's
+// print dialog via the same #print-root portal technique as Payslip.js.
 // ---------------------------------------------------------------------------
 
 function reportSiteName(sites, siteId) {
@@ -36,6 +36,8 @@ const REPORT_TYPES = {
       { key: 'name', label: 'Name' },
       { key: 'designation', label: 'Role' },
       { key: 'siteName', label: 'Site' },
+      { key: 'month', label: 'Month' },
+      { key: 'year', label: 'Year' },
       { key: 'presentDays', label: 'Present', align: 'right' },
       { key: 'halfDays', label: 'Half Day', align: 'right' },
       { key: 'absentDays', label: 'Absent', align: 'right' },
@@ -44,8 +46,10 @@ const REPORT_TYPES = {
     ],
     buildRows: (ctx) => filterReportEmployees(ctx.employees, ctx.siteId, ctx.role, true).map((emp) => {
       const stats = getMonthAttendanceStats(emp.id, ctx.month, ctx.attendance, ctx.settings.holidays, ctx.travelRecords);
+      const [year, monthNum] = ctx.month.split('-').map(Number);
       return {
         id: emp.id, name: emp.name, designation: emp.designation, siteName: reportSiteName(ctx.sites, emp.siteId),
+        month: new Date(year, monthNum - 1, 1).toLocaleDateString(undefined, { month: 'long' }), year,
         presentDays: stats.presentDays, halfDays: stats.halfDays, absentDays: stats.absentDays,
         otUnits: stats.otUnits, payableDays: Number((stats.presentDays + stats.halfDays * 0.5).toFixed(1)),
       };
@@ -226,25 +230,52 @@ function exportReportToExcel(reportLabel, columns, rows) {
   XLSX.writeFile(wb, `${reportLabel.replace(/\s+/g, '-')}-${todayISO()}.xlsx`);
 }
 
-function exportReportToPDF(reportLabel, subtitle, columns, rows, settings) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: columns.length > 6 ? 'landscape' : 'portrait' });
-  doc.setFontSize(14);
-  doc.text(reportLabel, 14, 15);
-  if (subtitle) {
-    doc.setFontSize(10);
-    doc.setTextColor(120);
-    doc.text(subtitle, 14, 21);
-  }
-  doc.autoTable({
-    startY: subtitle ? 26 : 20,
-    head: [columns.map((c) => c.label)],
-    body: rows.map((row) => columns.map((c) => renderReportCell(c, row, settings))),
-    styles: { fontSize: 8, cellPadding: 3 },
-    headStyles: { fillColor: [37, 99, 235], textColor: 255 },
-    columnStyles: columns.reduce((acc, c, i) => { if (c.align === 'right') acc[i] = { halign: 'right' }; return acc; }, {}),
-  });
-  doc.save(`${reportLabel.replace(/\s+/g, '-')}-${todayISO()}.pdf`);
+// Rendered via a portal into #print-root (same technique as PayslipModal) so
+// the print stylesheet can hide #root entirely and print just this table,
+// then fires the browser print dialog once it's actually on screen.
+function ReportPrintView({ companyName, reportLabel, subtitle, columns, rows, settings, onDone }) {
+  React.useEffect(() => {
+    const t = setTimeout(() => window.print(), 50);
+    const onAfterPrint = () => onDone();
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => { clearTimeout(t); window.removeEventListener('afterprint', onAfterPrint); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return ReactDOM.createPortal(
+    <div id="report-print-area">
+      <div className="flex items-start justify-between border-b border-slate-200 pb-4 mb-5">
+        <h1 className="text-xl font-extrabold text-slate-900">{companyName}</h1>
+        <div className="text-right">
+          <p className="text-xs uppercase tracking-wide text-slate-400">{reportLabel}</p>
+          {subtitle && <p className="text-sm text-slate-600">{subtitle}</p>}
+        </div>
+      </div>
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c.key} className={`border-b-2 border-slate-800 py-1.5 px-2 font-semibold text-slate-800 ${c.align === 'right' ? 'text-right' : 'text-left'}`}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i}>
+              {columns.map((c) => (
+                <td key={c.key} className={`border-b border-slate-200 py-1 px-2 ${c.align === 'right' ? 'text-right' : 'text-left'}`}>
+                  {renderReportCell(c, row, settings)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>,
+    document.getElementById('print-root')
+  );
 }
 
 function ReportsModule({ employees, sites, messes, attendance, settings, messExpenses, advances, salaryRevisions, travelRecords, showToast }) {
@@ -252,6 +283,7 @@ function ReportsModule({ employees, sites, messes, attendance, settings, messExp
   const [month, setMonth] = React.useState(currentMonthStr());
   const [siteId, setSiteId] = React.useState('all');
   const [role, setRole] = React.useState('all');
+  const [printing, setPrinting] = React.useState(false);
 
   const config = REPORT_TYPES[reportType];
   const rows = React.useMemo(() => {
@@ -271,11 +303,7 @@ function ReportsModule({ employees, sites, messes, attendance, settings, messExp
     showToast('Excel file downloaded');
   };
 
-  const handleExportPDF = () => {
-    if (typeof window.jspdf === 'undefined') { showToast('PDF export library failed to load. Check your connection.', 'error'); return; }
-    exportReportToPDF(config.label, subtitle, config.columns, rows, settings);
-    showToast('PDF file downloaded');
-  };
+  const handlePrint = () => setPrinting(true);
 
   return (
     <div className="space-y-4">
@@ -319,8 +347,8 @@ function ReportsModule({ employees, sites, messes, attendance, settings, messExp
             <Button variant="secondary" onClick={handleExportExcel} disabled={rows.length === 0}>
               <Icon name="file-spreadsheet" className="w-4 h-4" /> Export Excel
             </Button>
-            <Button variant="secondary" onClick={handleExportPDF} disabled={rows.length === 0}>
-              <Icon name="file-text" className="w-4 h-4" /> Export PDF
+            <Button variant="secondary" onClick={handlePrint} disabled={rows.length === 0}>
+              <Icon name="printer" className="w-4 h-4" /> Print
             </Button>
           </div>
         </div>
@@ -353,6 +381,13 @@ function ReportsModule({ employees, sites, messes, attendance, settings, messExp
             </table>
           </div>
         </div>
+      )}
+
+      {printing && (
+        <ReportPrintView
+          companyName={settings.companyName} reportLabel={config.label} subtitle={subtitle}
+          columns={config.columns} rows={rows} settings={settings} onDone={() => setPrinting(false)}
+        />
       )}
     </div>
   );

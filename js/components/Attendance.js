@@ -62,7 +62,7 @@ const STATUS_CYCLE = [undefined, 'present', 'halfday', 'absent'];
 // up by background polling) and saving never clobbers another user's
 // concurrent edit to a *different* employee on the same date — only the
 // employees this session actually changed are merged in.
-function DayView({ date, changeDate, employees, sites, siteName, attendance, setAttendance, settings, salaryRevisions, travelRecords, dirty, setDirty, showToast }) {
+function DayView({ date, changeDate, employees, setEmployees, sites, attendance, setAttendance, settings, salaryRevisions, travelRecords, dirty, setDirty, showToast }) {
   const [changes, setChanges] = React.useState({});
 
   React.useEffect(() => {
@@ -137,6 +137,11 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
     return Number(otCount || 0) * dailyRate;
   };
 
+  const reassignSite = (empId, siteId) => {
+    setEmployees(employees.map((e) => (e.id === empId ? { ...e, siteId: siteId || null } : e)));
+    showToast('Site allocation updated');
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -178,13 +183,24 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
                 <div key={emp.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-semibold text-slate-900">{emp.name}</p>
-                      <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                        {emp.id} · {siteName(emp.siteId)}
+                      <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                        {emp.name}
                         {onTravel && <Badge tone="blue">On Travel</Badge>}
                       </p>
+                      <p className="text-xs text-slate-400">{emp.id}</p>
                     </div>
                     <Badge tone={attendanceStatusTone(record.status)}>{attendanceStatusLabel(record.status)}</Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 mb-1.5">Site</p>
+                    <select
+                      className={selectClass + ' !py-1.5 text-xs'}
+                      value={emp.siteId || ''}
+                      onChange={(e) => reassignSite(emp.id, e.target.value)}
+                    >
+                      <option value="">Unassigned</option>
+                      {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
                   </div>
                   <div>
                     <p className="text-xs font-medium text-slate-500 mb-1.5">Status</p>
@@ -239,7 +255,16 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
                           </div>
                           <div className="text-xs text-slate-400">{emp.id}</div>
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{siteName(emp.siteId)}</td>
+                        <td className="px-4 py-3">
+                          <select
+                            className={selectClass + ' !py-1.5 text-xs min-w-[150px]'}
+                            value={emp.siteId || ''}
+                            onChange={(e) => reassignSite(emp.id, e.target.value)}
+                          >
+                            <option value="">Unassigned</option>
+                            {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </td>
                         <td className="px-4 py-3">
                           <StatusSelector value={record.status} onChange={(v) => updateRecord(emp.id, { status: v })} />
                         </td>
@@ -550,7 +575,7 @@ const ATTENDANCE_VIEW_MODES = [
   { key: 'month', label: 'Month' },
 ];
 
-function AttendanceModule({ employees, sites, attendance, setAttendance, settings, salaryRevisions, travelRecords, siteFilter, setSiteFilter, showToast }) {
+function AttendanceModule({ employees, setEmployees, sites, attendance, setAttendance, settings, salaryRevisions, travelRecords, siteFilter, setSiteFilter, showToast }) {
   const [viewMode, setViewMode] = React.useState('day');
   const [date, setDate] = React.useState(todayISO());
   const [weekAnchor, setWeekAnchor] = React.useState(todayISO());
@@ -562,8 +587,6 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
     if (siteFilter !== 'all') list = list.filter((e) => e.siteId === siteFilter);
     return list;
   }, [employees, siteFilter]);
-
-  const siteName = (id) => (sites.find((s) => s.id === id) || {}).name || 'Unassigned';
 
   const guardedNav = (setter) => (value) => {
     if (dirty && !window.confirm('You have unsaved attendance changes. Switch and discard them?')) return;
@@ -605,7 +628,7 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
 
       {viewMode === 'day' && (
         <DayView
-          date={date} changeDate={changeDate} employees={filteredEmployees} sites={sites} siteName={siteName}
+          date={date} changeDate={changeDate} employees={filteredEmployees} setEmployees={setEmployees} sites={sites}
           attendance={attendance} setAttendance={setAttendance} settings={settings} salaryRevisions={salaryRevisions} travelRecords={travelRecords}
           dirty={dirty} setDirty={setDirty} showToast={showToast}
         />

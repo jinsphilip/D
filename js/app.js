@@ -136,7 +136,7 @@ function AuthenticatedApp({ username, onLogout }) {
   } else if (tab === 'attendance') {
     content = (
       <AttendanceModule
-        employees={employees} sites={sites} attendance={attendance} setAttendance={setAttendance}
+        employees={employees} setEmployees={setEmployees} sites={sites} attendance={attendance} setAttendance={setAttendance}
         settings={settings} siteFilter={siteFilter} setSiteFilter={setSiteFilter} showToast={showToast}
         salaryRevisions={salaryRevisions} travelRecords={travelRecords}
       />

@@ -31,11 +31,20 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Payslip / print optimization. PayslipModal renders via a portal into
-   #print-root (a sibling of #root — see index.html), so printing can hide
-   #root outright instead of the more common visibility:hidden trick, which
-   leaves the rest of the app's real layout height in place and produces
-   extra blank pages after the payslip's own single page. */
+/* Unlike PayslipModal (a real on-screen preview the user opens and can
+   Print from), ReportPrintView has no preview step — it's built purely to
+   be printed, so it stays out of the normal document flow until an actual
+   print is in progress. */
+#report-print-area {
+  display: none;
+}
+
+/* Payslip / report print optimization. Both PayslipModal and
+   ReportPrintView (Reports.js) render via a portal into #print-root (a
+   sibling of #root — see index.html), so printing can hide #root outright
+   instead of the more common visibility:hidden trick, which leaves the
+   rest of the app's real layout height in place and produces extra blank
+   pages after the printed content's own page(s). */
 @media print {
   #root {
     display: none;
@@ -43,10 +52,13 @@ html, body {
   .no-print {
     display: none !important;
   }
-  #payslip-print-area {
+  #payslip-print-area, #report-print-area {
     width: 100%;
     margin: 0;
     padding: 24px;
+  }
+  #report-print-area {
+    display: block;
   }
   @page {
     size: A4;

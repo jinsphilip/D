@@ -39,9 +39,7 @@ function PayslipModal({ employee, site, mess, monthStr, settings, result, onClos
             <div className="text-slate-800 font-medium text-right">{employee.id}</div>
             <div className="text-slate-400">Name</div>
             <div className="text-slate-800 font-medium text-right">{employee.name}</div>
-            <div className="text-slate-400">Department</div>
-            <div className="text-slate-800 font-medium text-right">{employee.department}</div>
-            <div className="text-slate-400">Designation</div>
+            <div className="text-slate-400">Role</div>
             <div className="text-slate-800 font-medium text-right">{employee.designation}</div>
             <div className="text-slate-400">Job Site</div>
             <div className="text-slate-800 font-medium text-right">{site ? site.name : 'Unassigned'}</div>

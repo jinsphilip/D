@@ -4,8 +4,7 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
     employee || {
       id: nextEmployeeId(employees),
       name: '',
-      department: DEPARTMENTS[0],
-      designation: '',
+      designation: ROLES[0],
       baseSalary: '',
       phone: '',
       joinDate: todayISO(),
@@ -18,7 +17,7 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
 
   const submit = (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.designation.trim() || !form.baseSalary) return;
+    if (!form.name.trim() || !form.designation || !form.baseSalary) return;
     if (!isEdit && employees.some((emp) => emp.id === form.id.trim())) {
       setIdError('This Employee ID is already in use.');
       return;
@@ -43,13 +42,10 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
         <Field label="Full Name">
           <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         </Field>
-        <Field label="Department">
-          <select className={selectClass} value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })}>
-            {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+        <Field label="Role">
+          <select className={selectClass} value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })}>
+            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
-        </Field>
-        <Field label="Designation / Role">
-          <input className={inputClass} value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} placeholder="e.g. Site Engineer" required />
         </Field>
         <Field label="Base Monthly Salary" hint={isEdit ? 'Salary in effect before this employee\'s first recorded hike — use Salary History to record raises' : undefined}>
           <input type="number" min="0" step="0.01" className={inputClass} value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: e.target.value })} required />
@@ -212,15 +208,15 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sal
   const [historyEmp, setHistoryEmp] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [search, setSearch] = React.useState('');
-  const [deptFilter, setDeptFilter] = React.useState('all');
+  const [roleFilter, setRoleFilter] = React.useState('all');
 
   const siteName = (id) => (sites.find((s) => s.id === id) || {}).name || 'Unassigned';
 
   const filtered = employees.filter((e) => {
     const q = search.trim().toLowerCase();
     const matchesSearch = !q || e.name.toLowerCase().includes(q) || e.id.toLowerCase().includes(q);
-    const matchesDept = deptFilter === 'all' || e.department === deptFilter;
-    return matchesSearch && matchesDept;
+    const matchesRole = roleFilter === 'all' || e.designation === roleFilter;
+    return matchesSearch && matchesRole;
   });
 
   const saveEmployee = (form) => {
@@ -267,9 +263,9 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sal
           <Icon name="search" className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input className={inputClass + ' pl-9'} placeholder="Search by name or ID..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className={selectClass + ' sm:w-56'} value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
-          <option value="all">All Departments</option>
-          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+        <select className={selectClass + ' sm:w-56'} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+          <option value="all">All Roles</option>
+          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       </div>
 
@@ -282,7 +278,7 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sal
               <thead>
                 <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50/60">
                   <th className="px-4 py-2.5 font-medium">Employee</th>
-                  <th className="px-4 py-2.5 font-medium">Department / Role</th>
+                  <th className="px-4 py-2.5 font-medium">Role</th>
                   <th className="px-4 py-2.5 font-medium">Current Salary</th>
                   <th className="px-4 py-2.5 font-medium">Site</th>
                   <th className="px-4 py-2.5 font-medium">Mess</th>
@@ -299,10 +295,7 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sal
                       <div className="font-medium text-slate-800">{emp.name}</div>
                       <div className="text-xs text-slate-400">{emp.id} · {emp.phone || 'No phone'}</div>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="text-slate-700">{emp.department}</div>
-                      <div className="text-xs text-slate-400">{emp.designation}</div>
-                    </td>
+                    <td className="px-4 py-3 text-slate-700">{emp.designation}</td>
                     <td className="px-4 py-3 text-slate-700">
                       <div>{formatCurrency(currentSalary, settings.currency)}</div>
                       {currentSalary !== emp.baseSalary && (

@@ -14,7 +14,7 @@ const STORAGE_KEYS = {
   salaryRevisions: 'nep_salary_revisions',
 };
 
-const DEPARTMENTS = ['Operations', 'Engineering', 'Quality Control', 'Logistics', 'Administration'];
+const ROLES = ['Technician', 'Senior Technician'];
 const SITE_STATUSES = ['Active', 'On Hold', 'Completed'];
 const MESS_STATUSES = ['Active', 'Inactive'];
 const OT_LEVELS = [0.5, 1.0, 1.5, 2.0];
@@ -90,14 +90,14 @@ function seedSites() {
 
 function seedEmployees() {
   return [
-    { id: 'EMP101', name: 'Alexander Wright', department: 'Operations', designation: 'Supervisor', baseSalary: 45000, phone: '+1 555-0192', joinDate: '2023-01-15', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
-    { id: 'EMP102', name: 'Maria Gonzalez', department: 'Engineering', designation: 'Site Engineer', baseSalary: 52000, phone: '+1 555-0234', joinDate: '2023-03-10', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
-    { id: 'EMP103', name: 'David Chen', department: 'Quality Control', designation: 'QC Inspector', baseSalary: 38000, phone: '+1 555-0345', joinDate: '2023-05-20', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
-    { id: 'EMP104', name: 'Priya Sharma', department: 'Logistics', designation: 'Logistics Coordinator', baseSalary: 34000, phone: '+1 555-0456', joinDate: '2023-02-01', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
-    { id: 'EMP105', name: "James O'Brien", department: 'Operations', designation: 'Foreman', baseSalary: 40000, phone: '+1 555-0567', joinDate: '2022-11-11', status: 'Active', siteId: 'SITE-103', messId: null },
-    { id: 'EMP106', name: 'Fatima Al-Sayed', department: 'Engineering', designation: 'Junior Engineer', baseSalary: 30000, phone: '+1 555-0678', joinDate: '2024-01-08', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
-    { id: 'EMP107', name: 'Robert Kim', department: 'Logistics', designation: 'Driver', baseSalary: 26000, phone: '+1 555-0789', joinDate: '2023-08-19', status: 'Active', siteId: 'SITE-104', messId: 'MESS-3' },
-    { id: 'EMP108', name: 'Elena Petrova', department: 'Quality Control', designation: 'Safety Officer', baseSalary: 36000, phone: '+1 555-0890', joinDate: '2023-06-30', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
+    { id: 'EMP101', name: 'Alexander Wright', designation: 'Senior Technician', baseSalary: 45000, phone: '+1 555-0192', joinDate: '2023-01-15', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
+    { id: 'EMP102', name: 'Maria Gonzalez', designation: 'Senior Technician', baseSalary: 52000, phone: '+1 555-0234', joinDate: '2023-03-10', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
+    { id: 'EMP103', name: 'David Chen', designation: 'Technician', baseSalary: 38000, phone: '+1 555-0345', joinDate: '2023-05-20', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
+    { id: 'EMP104', name: 'Priya Sharma', designation: 'Technician', baseSalary: 34000, phone: '+1 555-0456', joinDate: '2023-02-01', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
+    { id: 'EMP105', name: "James O'Brien", designation: 'Senior Technician', baseSalary: 40000, phone: '+1 555-0567', joinDate: '2022-11-11', status: 'Active', siteId: 'SITE-103', messId: null },
+    { id: 'EMP106', name: 'Fatima Al-Sayed', designation: 'Technician', baseSalary: 30000, phone: '+1 555-0678', joinDate: '2024-01-08', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
+    { id: 'EMP107', name: 'Robert Kim', designation: 'Technician', baseSalary: 26000, phone: '+1 555-0789', joinDate: '2023-08-19', status: 'Active', siteId: 'SITE-104', messId: 'MESS-3' },
+    { id: 'EMP108', name: 'Elena Petrova', designation: 'Senior Technician', baseSalary: 36000, phone: '+1 555-0890', joinDate: '2023-06-30', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
   ];
 }
 

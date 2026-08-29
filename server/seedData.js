@@ -3,28 +3,6 @@
 // client-side seed functions so a fresh deployment looks the same as the
 // old localStorage-only demo did.
 
-function pad2(n) { return String(n).padStart(2, '0'); }
-
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function currentMonthStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-}
-
-function prevMonthStr(monthStr) {
-  const [y, m] = monthStr.split('-').map(Number);
-  const d = new Date(y, m - 2, 1);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-}
-
-function uid(prefix) {
-  return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-}
-
 function seedSites() {
   return [
     { id: 'SITE-101', name: 'Downtown Commercial Hub', location: 'Sector 12, Metro City', status: 'Active' },
@@ -36,14 +14,33 @@ function seedSites() {
 
 function seedEmployees() {
   return [
-    { id: 'EMP101', name: 'Alexander Wright', designation: 'Senior Technician', baseSalary: 45000, phone: '+1 555-0192', joinDate: '2023-01-15', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
-    { id: 'EMP102', name: 'Maria Gonzalez', designation: 'Senior Technician', baseSalary: 52000, phone: '+1 555-0234', joinDate: '2023-03-10', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
-    { id: 'EMP103', name: 'David Chen', designation: 'Technician', baseSalary: 38000, phone: '+1 555-0345', joinDate: '2023-05-20', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
-    { id: 'EMP104', name: 'Priya Sharma', designation: 'Technician', baseSalary: 34000, phone: '+1 555-0456', joinDate: '2023-02-01', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
-    { id: 'EMP105', name: "James O'Brien", designation: 'Senior Technician', baseSalary: 40000, phone: '+1 555-0567', joinDate: '2022-11-11', status: 'Active', siteId: 'SITE-103', messId: null },
-    { id: 'EMP106', name: 'Fatima Al-Sayed', designation: 'Technician', baseSalary: 30000, phone: '+1 555-0678', joinDate: '2024-01-08', status: 'Active', siteId: 'SITE-101', messId: 'MESS-1' },
-    { id: 'EMP107', name: 'Robert Kim', designation: 'Technician', baseSalary: 26000, phone: '+1 555-0789', joinDate: '2023-08-19', status: 'Active', siteId: 'SITE-104', messId: 'MESS-3' },
-    { id: 'EMP108', name: 'Elena Petrova', designation: 'Senior Technician', baseSalary: 36000, phone: '+1 555-0890', joinDate: '2023-06-30', status: 'Active', siteId: 'SITE-102', messId: 'MESS-2' },
+    { id: 'EMP101', name: 'MD Jahid', designation: 'Senior Technician', baseSalary: 20000, phone: '+91 9035553614', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP102', name: 'Pankaj Kumar', designation: 'Senior Technician', baseSalary: 21000, phone: '+91 9071907667', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP103', name: 'Umesh Paswan', designation: 'Senior Technician', baseSalary: 18000, phone: '+91 9611950241', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP104', name: 'Baldev Paswan', designation: 'Senior Technician', baseSalary: 19000, phone: '+91 9535327590', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP105', name: 'Rajan Paswan', designation: 'Senior Technician', baseSalary: 19500, phone: '+91 9113059237', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP106', name: 'MD Sahid', designation: 'Senior Technician', baseSalary: 19000, phone: '+91 9743168417', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP107', name: 'Raja Kumar', designation: 'Senior Technician', baseSalary: 19000, phone: '+91 8073761560', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP108', name: 'Akash Kumar', designation: 'Senior Technician', baseSalary: 16000, phone: '+91 7090035519', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP109', name: 'Vinod Kumar', designation: 'Senior Technician', baseSalary: 17000, phone: '+91 8581821061', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP110', name: 'Dinesh Kumar', designation: 'Senior Technician', baseSalary: 17000, phone: '+91 6362503412', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP111', name: 'Rajeev Paswan', designation: 'Senior Technician', baseSalary: 18500, phone: '+91 8496841450', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP112', name: 'Rahul Paswan', designation: 'Senior Technician', baseSalary: 18000, phone: '+91 6801091650', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP113', name: 'Saajan Paswan', designation: 'Senior Technician', baseSalary: 17000, phone: '+91 6202427151', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP114', name: 'Aman Kumar', designation: 'Technician', baseSalary: 14500, phone: '+91 7667025720', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP115', name: 'Suraj Paswan', designation: 'Technician', baseSalary: 14500, phone: '+91 7902668864', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP116', name: 'Rahul Kumar', designation: 'Technician', baseSalary: 14000, phone: '+91 7019199214', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP117', name: 'Dileep Paswan', designation: 'Technician', baseSalary: 13500, phone: '+91 6366714657', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP118', name: 'Vijay Kumar', designation: 'Senior Technician', baseSalary: 25000, phone: '+91 9110056458', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP119', name: 'Budhan Paswan', designation: 'Senior Technician', baseSalary: 24000, phone: '+91 8310438975', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP120', name: 'Anil Kumar', designation: 'Senior Technician', baseSalary: 24000, phone: '+91 9704693195', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP121', name: 'Vikaram Kumar', designation: 'Technician', baseSalary: 13000, phone: '+91 631713694', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP122', name: 'Ashik Kumr', designation: 'Technician', baseSalary: 12000, phone: '+91 9234169435', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP123', name: 'Munna Paswan', designation: 'Senior Technician', baseSalary: 18000, phone: '+91 6202217454', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP124', name: 'Rajan Kumar', designation: 'Technician', baseSalary: 14500, phone: '', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP125', name: 'Krishna Kumar', designation: 'Technician', baseSalary: 12000, phone: '', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP126', name: 'Rohit Kumar', designation: 'Technician', baseSalary: 13000, phone: '', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
+    { id: 'EMP127', name: 'Vivek Kumar', designation: 'Technician', baseSalary: 13000, phone: '', joinDate: '2026-08-29', status: 'Active', siteId: null, messId: null },
   ];
 }
 
@@ -56,40 +53,19 @@ function seedMesses() {
 }
 
 function seedMessExpenses() {
-  const month = currentMonthStr();
-  return {
-    [month]: {
-      'MESS-1': { EMP101: 6000, EMP102: 6000, EMP106: 6000 },
-      'MESS-2': { EMP103: 4000, EMP104: 4000, EMP108: 4000 },
-      'MESS-3': { EMP107: 6000 },
-    },
-  };
+  return {};
 }
 
 function seedAdvances() {
-  return [
-    { id: uid('ADV'), employeeId: 'EMP101', amount: 5000, dateGiven: prevMonthStr(currentMonthStr()) + '-10', note: 'Family emergency' },
-  ];
+  return [];
 }
 
 function seedSalaryRevisions() {
-  return [
-    { id: uid('SAL'), employeeId: 'EMP101', effectiveMonth: currentMonthStr(), newSalary: 48000, note: 'Annual performance increment' },
-  ];
+  return [];
 }
 
 function seedAttendance() {
-  const today = todayISO();
-  return {
-    [today]: {
-      EMP101: { status: 'present', otCount: 1.0, note: '' },
-      EMP102: { status: 'present', otCount: 0, note: '' },
-      EMP103: { status: 'present', otCount: 0.5, note: '' },
-      EMP104: { status: 'halfday', otCount: 0, note: 'Left early' },
-      EMP105: { status: 'absent', otCount: 0, note: 'Medical leave' },
-      EMP106: { status: 'present', otCount: 0, note: '' },
-    },
-  };
+  return {};
 }
 
 function seedSettings() {

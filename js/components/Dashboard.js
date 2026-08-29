@@ -1,4 +1,4 @@
-function Dashboard({ sites, employees, attendance, settings, messExpenses, advances, salaryRevisions, siteFilter, setSiteFilter, onNavigate }) {
+function Dashboard({ sites, employees, attendance, settings, messExpenses, advances, salaryRevisions, travelRecords, siteFilter, setSiteFilter, onNavigate }) {
   const today = todayISO();
   const month = currentMonthStr();
 
@@ -22,12 +22,12 @@ function Dashboard({ sites, employees, attendance, settings, messExpenses, advan
   }).length;
 
   const estimatedPayroll = React.useMemo(() => {
-    const extras = { employees, messExpenses, advances, salaryRevisions };
+    const extras = { employees, messExpenses, advances, salaryRevisions, travelRecords };
     return activeEmployees.reduce((sum, emp) => {
       const result = calculateEmployeePayroll(emp, month, attendance, settings, extras);
       return sum + result.netPayable;
     }, 0);
-  }, [activeEmployees, employees, messExpenses, advances, salaryRevisions, attendance, settings, month]);
+  }, [activeEmployees, employees, messExpenses, advances, salaryRevisions, travelRecords, attendance, settings, month]);
 
   const siteName = (id) => (sites.find((s) => s.id === id) || {}).name || '—';
 

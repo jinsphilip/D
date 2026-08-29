@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   messExpenses: 'nep_mess_expenses',
   advances: 'nep_advances',
   salaryRevisions: 'nep_salary_revisions',
+  travelRecords: 'nep_travel_records',
 };
 
 const ROLES = ['Technician', 'Senior Technician'];
@@ -140,6 +141,10 @@ function seedSalaryRevisions() {
   return [];
 }
 
+function seedTravelRecords() {
+  return [];
+}
+
 function seedAttendance() {
   return {};
 }
@@ -246,6 +251,12 @@ function isHolidayDate(dateStr, holidays) {
   return (holidays || []).some((h) => h.date === dateStr);
 }
 
+// Whether employeeId is on an approved (company-paid) travel trip covering
+// dateStr — inclusive of both the departure and join-back dates.
+function isOnApprovedTravel(employeeId, dateStr, travelRecords) {
+  return (travelRecords || []).some((t) => t.employeeId === employeeId && dateStr >= t.fromDate && dateStr <= t.joinBackDate);
+}
+
 // dateStr shifted by n days (n may be negative).
 function addDays(dateStr, n) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -302,7 +313,7 @@ function getWorkingDaysInMonth(monthStr, mode, holidays) {
 // it's explicitly marked (gives the site manager the rest of the day to
 // log it) instead of being pre-emptively docked as absent at 9am; future
 // days are never counted either way.
-function getMonthAttendanceStats(employeeId, monthStr, attendance, holidays) {
+function getMonthAttendanceStats(employeeId, monthStr, attendance, holidays, travelRecords) {
   const totalDaysInMonth = daysInCalendarMonth(monthStr);
   const todayStr = todayISO();
 
@@ -316,12 +327,12 @@ function getMonthAttendanceStats(employeeId, monthStr, attendance, holidays) {
       else if (record.status === 'halfday') halfDays++;
       else if (record.status === 'absent') absentDays++;
       otUnits += Number(record.otCount) || 0;
-    } else if (dateKey < todayStr && !isHolidayDate(dateKey, holidays)) {
+    } else if (dateKey < todayStr && !isHolidayDate(dateKey, holidays) && !isOnApprovedTravel(employeeId, dateKey, travelRecords)) {
       absentDays++; // day already passed with nothing logged -> defaults to absent
     }
-    // Sundays/holidays left unmarked are simply skipped — not a working day,
-    // so no default-absent deduction (unless someone was explicitly logged
-    // as having worked it, handled by the branch above).
+    // Sundays/holidays/approved travel days left unmarked are simply
+    // skipped — not a working day, so no default-absent deduction (unless
+    // someone was explicitly logged as having worked it, handled above).
   }
   return { presentDays, halfDays, absentDays, otUnits, loggedDays };
 }
@@ -380,13 +391,14 @@ function getSalaryForMonth(employee, monthStr, salaryRevisions) {
 
 // Full payroll computation for one employee for one month, per spec formulas.
 // `extras` carries cross-entity context needed for mess fees, advance
-// recovery and historical salary resolution: { employees, messExpenses,
-// advances, salaryRevisions }.
+// recovery, historical salary resolution and approved-travel exemption:
+// { employees, messExpenses, advances, salaryRevisions, travelRecords }.
 function calculateEmployeePayroll(employee, monthStr, attendance, settings, extras) {
   extras = extras || {};
   const messExpenses = extras.messExpenses || {};
   const advances = extras.advances || [];
   const salaryRevisions = extras.salaryRevisions || [];
+  const travelRecords = extras.travelRecords || [];
 
   // The salary actually in effect for this month — not necessarily the
   // employee's current baseSalary — so past months stay unaffected by a
@@ -395,7 +407,7 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
 
   const workingDays = getWorkingDaysInMonth(monthStr, settings.daysInMonthMode, settings.holidays);
   const dailyRate = workingDays > 0 ? effectiveSalary / workingDays : 0;
-  const stats = getMonthAttendanceStats(employee.id, monthStr, attendance, settings.holidays);
+  const stats = getMonthAttendanceStats(employee.id, monthStr, attendance, settings.holidays, travelRecords);
 
   const absentDeduction = stats.absentDays * dailyRate;
   const halfDayDeduction = stats.halfDays * 0.5 * dailyRate;
@@ -446,4 +458,17 @@ function monthLabel(monthStr) {
 function dateLabel(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Format-only validation (12 digits) — deliberately not the official UIDAI
+// Verhoeff checksum, which only catches typos, not a fundamentally wrong
+// number; not worth the added complexity for a "provision to enter" field.
+function isValidAadhaar(number) {
+  return /^\d{12}$/.test(number);
+}
+
+function maskAadhaarNumber(number) {
+  const digits = String(number || '');
+  const last4 = digits.slice(-4);
+  return `XXXX XXXX ${last4}`;
 }

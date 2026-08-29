@@ -1,4 +1,4 @@
-function PayrollModule({ employees, sites, messes, messExpenses, advances, salaryRevisions, attendance, settings, siteFilter, setSiteFilter }) {
+function PayrollModule({ employees, sites, messes, messExpenses, advances, salaryRevisions, travelRecords, attendance, settings, siteFilter, setSiteFilter }) {
   const [month, setMonth] = React.useState(currentMonthStr());
   const [payslipEmp, setPayslipEmp] = React.useState(null);
 
@@ -8,7 +8,7 @@ function PayrollModule({ employees, sites, messes, messExpenses, advances, salar
     return list;
   }, [employees, siteFilter]);
 
-  const extras = React.useMemo(() => ({ employees, messExpenses, advances, salaryRevisions }), [employees, messExpenses, advances, salaryRevisions]);
+  const extras = React.useMemo(() => ({ employees, messExpenses, advances, salaryRevisions, travelRecords }), [employees, messExpenses, advances, salaryRevisions, travelRecords]);
 
   const rows = React.useMemo(() => {
     return filteredEmployees.map((emp) => ({

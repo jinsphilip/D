@@ -64,6 +64,10 @@ function seedSalaryRevisions() {
   return [];
 }
 
+function seedTravelRecords() {
+  return [];
+}
+
 function seedAttendance() {
   return {};
 }
@@ -89,5 +93,6 @@ module.exports = function seedStore() {
     nep_mess_expenses: seedMessExpenses(),
     nep_advances: seedAdvances(),
     nep_salary_revisions: seedSalaryRevisions(),
+    nep_travel_records: seedTravelRecords(),
   };
 };

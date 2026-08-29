@@ -7,6 +7,7 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
       designation: ROLES[0],
       baseSalary: '',
       phone: '',
+      aadhaarNumber: '',
       joinDate: todayISO(),
       status: 'Active',
       siteId: sites[0] ? sites[0].id : null,
@@ -14,15 +15,23 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
     }
   );
   const [idError, setIdError] = React.useState('');
+  const [aadhaarError, setAadhaarError] = React.useState('');
+  const [revealAadhaar, setRevealAadhaar] = React.useState(!(employee && employee.aadhaarNumber));
 
   const submit = (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.designation || !form.baseSalary) return;
-    if (!isEdit && employees.some((emp) => emp.id === form.id.trim())) {
+    const trimmedId = form.id.trim();
+    if (employees.some((emp) => emp.id === trimmedId && !(isEdit && emp.id === employee.id))) {
       setIdError('This Employee ID is already in use.');
       return;
     }
-    onSave({ ...form, id: form.id.trim(), baseSalary: Number(form.baseSalary) });
+    const aadhaarNumber = (form.aadhaarNumber || '').trim();
+    if (aadhaarNumber && !isValidAadhaar(aadhaarNumber)) {
+      setAadhaarError('Aadhaar number must be exactly 12 digits.');
+      return;
+    }
+    onSave({ ...form, id: trimmedId, baseSalary: Number(form.baseSalary), aadhaarNumber });
   };
 
   return (
@@ -32,7 +41,6 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
           <input
             className={inputClass}
             value={form.id}
-            disabled={isEdit}
             onChange={(e) => { setForm({ ...form, id: e.target.value }); setIdError(''); }}
             placeholder="EMPxxx"
             required
@@ -52,6 +60,27 @@ function EmployeeForm({ employee, sites, messes, employees, onSave, onClose }) {
         </Field>
         <Field label="Phone Number">
           <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+1 555-0100" />
+        </Field>
+        <Field label="Aadhaar Number" hint="Optional">
+          <div className="relative">
+            <input
+              type="text"
+              className={inputClass + ' pr-9'}
+              value={revealAadhaar ? (form.aadhaarNumber || '') : (form.aadhaarNumber ? maskAadhaarNumber(form.aadhaarNumber) : '')}
+              readOnly={!revealAadhaar}
+              onChange={(e) => { setForm({ ...form, aadhaarNumber: e.target.value.replace(/\D/g, '').slice(0, 12) }); setAadhaarError(''); }}
+              placeholder="12-digit number"
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              onClick={() => setRevealAadhaar((v) => !v)}
+              aria-label={revealAadhaar ? 'Hide Aadhaar number' : 'Reveal Aadhaar number'}
+            >
+              <Icon name={revealAadhaar ? 'eye-off' : 'eye'} className="w-4 h-4" />
+            </button>
+          </div>
+          {aadhaarError && <span className="text-xs text-rose-500">{aadhaarError}</span>}
         </Field>
         <Field label="Date of Joining">
           <input type="date" className={inputClass} value={form.joinDate} onChange={(e) => setForm({ ...form, joinDate: e.target.value })} />
@@ -203,7 +232,14 @@ function SalaryHistoryModal({ employee, salaryRevisions, setSalaryRevisions, set
   );
 }
 
-function EmployeesModule({ employees, setEmployees, sites, messes, settings, salaryRevisions, setSalaryRevisions, showToast }) {
+function EmployeesModule({
+  employees, setEmployees, sites, messes, settings, showToast,
+  salaryRevisions, setSalaryRevisions,
+  attendance, setAttendance,
+  messExpenses, setMessExpenses,
+  advances, setAdvances,
+  travelRecords, setTravelRecords,
+}) {
   const [formEmp, setFormEmp] = React.useState(null);
   const [historyEmp, setHistoryEmp] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
@@ -219,9 +255,55 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sal
     return matchesSearch && matchesRole;
   });
 
+  // attendance[date][employeeId], messExpenses[month][messId][employeeId],
+  // advances/salaryRevisions/travelRecords[].employeeId all reference an
+  // employee by id — changing the id has to cascade or every past record
+  // for that employee silently orphans.
+  const hasRelatedRecords = (empId) => {
+    const inAttendance = Object.values(attendance).some((day) => day && Object.prototype.hasOwnProperty.call(day, empId));
+    const inMessExpenses = Object.values(messExpenses).some(
+      (byMess) => byMess && Object.values(byMess).some((fees) => fees && Object.prototype.hasOwnProperty.call(fees, empId))
+    );
+    return (
+      inAttendance || inMessExpenses ||
+      advances.some((a) => a.employeeId === empId) ||
+      salaryRevisions.some((r) => r.employeeId === empId) ||
+      travelRecords.some((t) => t.employeeId === empId)
+    );
+  };
+
+  const cascadeRenameId = (oldId, newId) => {
+    setAttendance(Object.fromEntries(Object.entries(attendance).map(([date, day]) => {
+      if (!day || !Object.prototype.hasOwnProperty.call(day, oldId)) return [date, day];
+      const { [oldId]: record, ...rest } = day;
+      return [date, { ...rest, [newId]: record }];
+    })));
+    setMessExpenses(Object.fromEntries(Object.entries(messExpenses).map(([month, byMess]) => [
+      month,
+      Object.fromEntries(Object.entries(byMess || {}).map(([messId, fees]) => {
+        if (!fees || !Object.prototype.hasOwnProperty.call(fees, oldId)) return [messId, fees];
+        const { [oldId]: fee, ...rest } = fees;
+        return [messId, { ...rest, [newId]: fee }];
+      })),
+    ])));
+    setAdvances(advances.map((a) => (a.employeeId === oldId ? { ...a, employeeId: newId } : a)));
+    setSalaryRevisions(salaryRevisions.map((r) => (r.employeeId === oldId ? { ...r, employeeId: newId } : r)));
+    setTravelRecords(travelRecords.map((t) => (t.employeeId === oldId ? { ...t, employeeId: newId } : t)));
+  };
+
   const saveEmployee = (form) => {
-    if (employees.some((e) => e.id === form.id) && formEmp && formEmp.id) {
-      setEmployees(employees.map((e) => (e.id === form.id ? form : e)));
+    const originalId = formEmp && formEmp.id;
+    if (originalId) {
+      if (form.id !== originalId) {
+        if (
+          hasRelatedRecords(originalId) &&
+          !window.confirm(`Changing the Employee ID will move ${originalId}'s attendance, mess fees, advances, salary history and travel records to the new ID (${form.id}). Continue?`)
+        ) {
+          return;
+        }
+        cascadeRenameId(originalId, form.id);
+      }
+      setEmployees(employees.map((e) => (e.id === originalId ? form : e)));
       showToast('Employee updated');
     } else {
       setEmployees([...employees, form]);
@@ -292,7 +374,10 @@ function EmployeesModule({ employees, setEmployees, sites, messes, settings, sal
                   return (
                   <tr key={emp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-slate-800">{emp.name}</div>
+                      <div className="font-medium text-slate-800 flex items-center gap-1.5">
+                        {emp.name}
+                        {emp.aadhaarNumber && <Icon name="shield-check" className="w-3.5 h-3.5 text-emerald-500" aria-label="Aadhaar on file" />}
+                      </div>
                       <div className="text-xs text-slate-400">{emp.id} · {emp.phone || 'No phone'}</div>
                     </td>
                     <td className="px-4 py-3 text-slate-700">{emp.designation}</td>

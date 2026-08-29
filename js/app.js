@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { key: 'payroll', label: 'Payroll', icon: 'wallet' },
   { key: 'mess', label: 'Mess', icon: 'utensils' },
   { key: 'advances', label: 'Advances', icon: 'hand-coins' },
+  { key: 'travel', label: 'Travel', icon: 'plane' },
   { key: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
@@ -99,6 +100,7 @@ function AuthenticatedApp({ username, onLogout }) {
   const [messExpenses, setMessExpenses, messExpensesErr] = useServerState(STORAGE_KEYS.messExpenses, seedMessExpenses);
   const [advances, setAdvances, advancesErr] = useServerState(STORAGE_KEYS.advances, seedAdvances);
   const [salaryRevisions, setSalaryRevisions, salaryRevisionsErr] = useServerState(STORAGE_KEYS.salaryRevisions, seedSalaryRevisions);
+  const [travelRecords, setTravelRecords, travelRecordsErr] = useServerState(STORAGE_KEYS.travelRecords, seedTravelRecords);
 
   const [tab, setTab] = React.useState('dashboard');
   const [siteFilter, setSiteFilter] = React.useState('all');
@@ -111,10 +113,10 @@ function AuthenticatedApp({ username, onLogout }) {
 
   const navigate = (key) => { setTab(key); setMobileNavOpen(false); };
 
-  const firstError = sitesErr || employeesErr || attendanceErr || settingsErr || messesErr || messExpensesErr || advancesErr || salaryRevisionsErr;
+  const firstError = sitesErr || employeesErr || attendanceErr || settingsErr || messesErr || messExpensesErr || advancesErr || salaryRevisionsErr || travelRecordsErr;
   if (firstError) return <ServerErrorScreen message={firstError} />;
 
-  const stillLoading = [sites, employees, attendance, settings, messes, messExpenses, advances, salaryRevisions].some((v) => v === null);
+  const stillLoading = [sites, employees, attendance, settings, messes, messExpenses, advances, salaryRevisions, travelRecords].some((v) => v === null);
   if (stillLoading) return <LoadingScreen />;
 
   let content = null;
@@ -122,7 +124,7 @@ function AuthenticatedApp({ username, onLogout }) {
     content = (
       <Dashboard
         sites={sites} employees={employees} attendance={attendance} settings={settings}
-        messExpenses={messExpenses} advances={advances} salaryRevisions={salaryRevisions}
+        messExpenses={messExpenses} advances={advances} salaryRevisions={salaryRevisions} travelRecords={travelRecords}
         siteFilter={siteFilter} setSiteFilter={setSiteFilter} onNavigate={navigate}
       />
     );
@@ -135,7 +137,7 @@ function AuthenticatedApp({ username, onLogout }) {
       <AttendanceModule
         employees={employees} sites={sites} attendance={attendance} setAttendance={setAttendance}
         settings={settings} siteFilter={siteFilter} setSiteFilter={setSiteFilter} showToast={showToast}
-        salaryRevisions={salaryRevisions}
+        salaryRevisions={salaryRevisions} travelRecords={travelRecords}
       />
     );
   } else if (tab === 'employees') {
@@ -143,6 +145,10 @@ function AuthenticatedApp({ username, onLogout }) {
       <EmployeesModule
         employees={employees} setEmployees={setEmployees} sites={sites} messes={messes} settings={settings} showToast={showToast}
         salaryRevisions={salaryRevisions} setSalaryRevisions={setSalaryRevisions}
+        attendance={attendance} setAttendance={setAttendance}
+        messExpenses={messExpenses} setMessExpenses={setMessExpenses}
+        advances={advances} setAdvances={setAdvances}
+        travelRecords={travelRecords} setTravelRecords={setTravelRecords}
       />
     );
   } else if (tab === 'payroll') {
@@ -151,7 +157,7 @@ function AuthenticatedApp({ username, onLogout }) {
         employees={employees} sites={sites} messes={messes} messExpenses={messExpenses} advances={advances}
         attendance={attendance} settings={settings}
         siteFilter={siteFilter} setSiteFilter={setSiteFilter}
-        salaryRevisions={salaryRevisions}
+        salaryRevisions={salaryRevisions} travelRecords={travelRecords}
       />
     );
   } else if (tab === 'mess') {
@@ -164,6 +170,10 @@ function AuthenticatedApp({ username, onLogout }) {
   } else if (tab === 'advances') {
     content = (
       <AdvancesModule employees={employees} advances={advances} setAdvances={setAdvances} settings={settings} showToast={showToast} />
+    );
+  } else if (tab === 'travel') {
+    content = (
+      <TravelModule employees={employees} travelRecords={travelRecords} setTravelRecords={setTravelRecords} settings={settings} showToast={showToast} />
     );
   } else if (tab === 'settings') {
     content = <SettingsModule settings={settings} setSettings={setSettings} showToast={showToast} username={username} />;

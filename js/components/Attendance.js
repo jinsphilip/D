@@ -62,7 +62,7 @@ const STATUS_CYCLE = [undefined, 'present', 'halfday', 'absent'];
 // up by background polling) and saving never clobbers another user's
 // concurrent edit to a *different* employee on the same date — only the
 // employees this session actually changed are merged in.
-function DayView({ date, changeDate, employees, sites, siteName, attendance, setAttendance, settings, salaryRevisions, dirty, setDirty, showToast }) {
+function DayView({ date, changeDate, employees, sites, siteName, attendance, setAttendance, settings, salaryRevisions, travelRecords, dirty, setDirty, showToast }) {
   const [changes, setChanges] = React.useState({});
 
   React.useEffect(() => {
@@ -173,12 +173,16 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
           <div className="md:hidden space-y-3">
             {employees.map((emp) => {
               const record = getRecord(emp.id);
+              const onTravel = isOnApprovedTravel(emp.id, date, travelRecords);
               return (
                 <div key={emp.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-semibold text-slate-900">{emp.name}</p>
-                      <p className="text-xs text-slate-400">{emp.id} · {siteName(emp.siteId)}</p>
+                      <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                        {emp.id} · {siteName(emp.siteId)}
+                        {onTravel && <Badge tone="blue">On Travel</Badge>}
+                      </p>
                     </div>
                     <Badge tone={attendanceStatusTone(record.status)}>{attendanceStatusLabel(record.status)}</Badge>
                   </div>
@@ -225,10 +229,14 @@ function DayView({ date, changeDate, employees, sites, siteName, attendance, set
                 <tbody>
                   {employees.map((emp) => {
                     const record = getRecord(emp.id);
+                    const onTravel = isOnApprovedTravel(emp.id, date, travelRecords);
                     return (
                       <tr key={emp.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60 align-top">
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">{emp.name}</div>
+                          <div className="font-medium text-slate-800 flex items-center gap-1.5">
+                            {emp.name}
+                            {onTravel && <Badge tone="blue">On Travel</Badge>}
+                          </div>
                           <div className="text-xs text-slate-400">{emp.id}</div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{siteName(emp.siteId)}</td>
@@ -542,7 +550,7 @@ const ATTENDANCE_VIEW_MODES = [
   { key: 'month', label: 'Month' },
 ];
 
-function AttendanceModule({ employees, sites, attendance, setAttendance, settings, salaryRevisions, siteFilter, setSiteFilter, showToast }) {
+function AttendanceModule({ employees, sites, attendance, setAttendance, settings, salaryRevisions, travelRecords, siteFilter, setSiteFilter, showToast }) {
   const [viewMode, setViewMode] = React.useState('day');
   const [date, setDate] = React.useState(todayISO());
   const [weekAnchor, setWeekAnchor] = React.useState(todayISO());
@@ -598,7 +606,7 @@ function AttendanceModule({ employees, sites, attendance, setAttendance, setting
       {viewMode === 'day' && (
         <DayView
           date={date} changeDate={changeDate} employees={filteredEmployees} sites={sites} siteName={siteName}
-          attendance={attendance} setAttendance={setAttendance} settings={settings} salaryRevisions={salaryRevisions}
+          attendance={attendance} setAttendance={setAttendance} settings={settings} salaryRevisions={salaryRevisions} travelRecords={travelRecords}
           dirty={dirty} setDirty={setDirty} showToast={showToast}
         />
       )}

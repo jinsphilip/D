@@ -1,6 +1,18 @@
 function PayslipModal({ employee, site, mess, monthStr, settings, result, onClose }) {
   const handlePrint = () => window.print();
 
+  // Zero-value deduction rows are hidden entirely rather than shown as
+  // "− ₹0.00" — but whichever row ends up actually last before the Net
+  // Payable total still needs the heavier divider that used to be
+  // hardcoded onto Half-Day (back when it was always the last row).
+  const showAbsent = result.absentDays > 0;
+  const showHalfDay = result.halfDays > 0;
+  const showMess = result.messDeduction > 0;
+  const showAdvance = result.advanceDeduction > 0;
+  const lastRow = showAdvance ? 'advance' : showMess ? 'mess' : showHalfDay ? 'halfday' : showAbsent ? 'absent' : 'ot';
+  const heavyBorder = 'border-b border-slate-200';
+  const lightBorder = 'border-b border-slate-100';
+
   // Rendered via a portal into #print-root (a sibling of #root in
   // index.html) rather than inline in the component tree, so the print
   // stylesheet can hide #root entirely instead of just hiding its contents
@@ -81,20 +93,24 @@ function PayslipModal({ employee, site, mess, monthStr, settings, result, onClos
                   <td className="py-2 text-slate-600">Basic Salary</td>
                   <td className="py-2 text-right font-medium text-slate-800">{formatCurrency(result.baseSalary, settings.currency)}</td>
                 </tr>
-                <tr className="border-b border-slate-100">
+                <tr className={lastRow === 'ot' ? heavyBorder : lightBorder}>
                   <td className="py-2 text-slate-600">Overtime Allowance ({result.otUnits.toFixed(1)} day(s) OT)</td>
                   <td className="py-2 text-right font-medium text-emerald-600">+ {formatCurrency(result.otEarnings, settings.currency)}</td>
                 </tr>
-                <tr className="border-b border-slate-100">
-                  <td className="py-2 text-slate-600">Absenteeism Deduction ({result.absentDays} day(s))</td>
-                  <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.absentDeduction, settings.currency)}</td>
-                </tr>
-                <tr className={result.messDeduction > 0 || result.advanceDeduction > 0 ? 'border-b border-slate-100' : 'border-b border-slate-200'}>
-                  <td className="py-2 text-slate-600">Half-Day Deduction ({result.halfDays} day(s))</td>
-                  <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.halfDayDeduction, settings.currency)}</td>
-                </tr>
-                {result.messDeduction > 0 && (
-                  <tr className="border-b border-slate-100">
+                {showAbsent && (
+                  <tr className={lastRow === 'absent' ? heavyBorder : lightBorder}>
+                    <td className="py-2 text-slate-600">Absenteeism Deduction ({result.absentDays} day(s))</td>
+                    <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.absentDeduction, settings.currency)}</td>
+                  </tr>
+                )}
+                {showHalfDay && (
+                  <tr className={lastRow === 'halfday' ? heavyBorder : lightBorder}>
+                    <td className="py-2 text-slate-600">Half-Day Deduction ({result.halfDays} day(s))</td>
+                    <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.halfDayDeduction, settings.currency)}</td>
+                  </tr>
+                )}
+                {showMess && (
+                  <tr className={lastRow === 'mess' ? heavyBorder : lightBorder}>
                     <td className="py-2 text-slate-600 align-top">
                       Mess Deduction{mess ? ` (${mess.name})` : ''}
                       {result.appliedMessDeduction < result.messDeduction && (
@@ -106,8 +122,8 @@ function PayslipModal({ employee, site, mess, monthStr, settings, result, onClos
                     <td className="py-2 text-right font-medium text-rose-600 align-top">− {formatCurrency(result.appliedMessDeduction, settings.currency)}</td>
                   </tr>
                 )}
-                {result.advanceDeduction > 0 && (
-                  <tr className="border-b border-slate-200">
+                {showAdvance && (
+                  <tr className={lastRow === 'advance' ? heavyBorder : lightBorder}>
                     <td className="py-2 text-slate-600 align-top">
                       Salary Advance Recovery
                       <div className="text-[11px] text-slate-400 mt-0.5 space-y-0.5">

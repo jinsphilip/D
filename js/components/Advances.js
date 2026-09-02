@@ -35,7 +35,7 @@ function AdvanceForm({ advance, employees, onSave, onClose }) {
             <input type="number" min="0.01" step="0.01" className={inputClass} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
           </div>
         </Field>
-        <Field label="Date Given" hint="The full amount is recovered from next month's payroll">
+        <Field label="Date Given" hint="Recovered from next month's payroll, up to what's actually earned">
           <input type="date" className={inputClass} value={form.dateGiven} max={todayISO()} onChange={(e) => setForm({ ...form, dateGiven: e.target.value })} required />
         </Field>
         <Field label="Note" hint="Optional">
@@ -50,7 +50,7 @@ function AdvanceForm({ advance, employees, onSave, onClose }) {
   );
 }
 
-function AdvancesModule({ employees, advances, setAdvances, settings, showToast }) {
+function AdvancesModule({ employees, advances, setAdvances, attendance, messExpenses, salaryRevisions, travelRecords, settings, showToast }) {
   const [formAdvance, setFormAdvance] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [refMonth, setRefMonth] = React.useState(currentMonthStr());
@@ -61,14 +61,47 @@ function AdvancesModule({ employees, advances, setAdvances, settings, showToast 
     .map((a) => ({ ...a, status: getAdvanceStatus(a, refMonth), recoveryMonth: nextMonthStr(a.dateGiven.slice(0, 7)) }))
     .sort((a, b) => (a.dateGiven < b.dateGiven ? 1 : -1));
 
+  // Whether an advance's recovery month has fully passed (status
+  // 'recovered') doesn't say whether the employee actually earned enough
+  // that month to cover it — Math.max(0, ...) in calculateEmployeePayroll
+  // silently absorbs any shortfall unless recomputed here. Only advances
+  // already past their recovery month are checked (not 'due', since that
+  // month's attendance may still be incomplete/provisional, and not
+  // 'upcoming', since nothing's happened yet) — grouped by employee +
+  // recovery month so the payroll waterfall (which depends on every
+  // advance due that month together) only runs once per group.
+  const recoveryByAdvanceId = React.useMemo(() => {
+    const map = {};
+    const groups = {};
+    advances.forEach((a) => {
+      if (getAdvanceStatus(a, refMonth) !== 'recovered') return;
+      const recoveryMonth = nextMonthStr(a.dateGiven.slice(0, 7));
+      const key = `${a.employeeId}|${recoveryMonth}`;
+      groups[key] = groups[key] || { employeeId: a.employeeId, recoveryMonth };
+    });
+    const extras = { employees, messExpenses, advances, salaryRevisions, travelRecords };
+    Object.values(groups).forEach(({ employeeId, recoveryMonth }) => {
+      const employee = employees.find((e) => e.id === employeeId);
+      if (!employee) return;
+      const result = calculateEmployeePayroll(employee, recoveryMonth, attendance, settings, extras);
+      result.appliedAdvances.forEach((r) => {
+        map[r.id] = { recoveredAmount: r.recoveredAmount, outstandingAmount: r.outstandingAmount };
+      });
+    });
+    return map;
+  }, [advances, employees, attendance, settings, messExpenses, salaryRevisions, travelRecords, refMonth]);
+
   const totals = rows.reduce(
     (acc, a) => {
-      if (a.status === 'recovered') acc.recovered += a.amount;
-      else if (a.status === 'due') acc.due += a.amount;
+      if (a.status === 'recovered') {
+        const recovery = recoveryByAdvanceId[a.id];
+        acc.recovered += recovery ? recovery.recoveredAmount : a.amount;
+        acc.outstanding += recovery ? recovery.outstandingAmount : 0;
+      } else if (a.status === 'due') acc.due += a.amount;
       else acc.upcoming += a.amount;
       return acc;
     },
-    { due: 0, upcoming: 0, recovered: 0 }
+    { due: 0, upcoming: 0, recovered: 0, outstanding: 0 }
   );
 
   const saveAdvance = (form) => {
@@ -93,7 +126,7 @@ function AdvancesModule({ employees, advances, setAdvances, settings, showToast 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Salary Advances</h2>
-          <p className="text-sm text-slate-500">Each advance is recovered in full from the following month's payroll</p>
+          <p className="text-sm text-slate-500">Each advance is scheduled for recovery from the following month's payroll — if that month's earnings fall short, the remainder is tracked as outstanding, not carried forward automatically</p>
         </div>
         <div className="flex items-center gap-2">
           <input type="month" className={inputClass + ' w-auto'} value={refMonth} onChange={(e) => setRefMonth(e.target.value)} />
@@ -103,10 +136,11 @@ function AdvancesModule({ employees, advances, setAdvances, settings, showToast 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon="clock" label="Deducting This Cycle" value={formatCurrency(totals.due, settings.currency)} tone="amber" />
         <StatCard icon="hourglass" label="Upcoming" value={formatCurrency(totals.upcoming, settings.currency)} tone="blue" />
         <StatCard icon="check-circle-2" label="Recovered" value={formatCurrency(totals.recovered, settings.currency)} tone="slate" />
+        <StatCard icon="alert-triangle" label="Outstanding" value={formatCurrency(totals.outstanding, settings.currency)} tone="amber" />
       </div>
 
       {rows.length === 0 ? (
@@ -127,7 +161,10 @@ function AdvancesModule({ employees, advances, setAdvances, settings, showToast 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((a) => (
+                {rows.map((a) => {
+                  const recovery = recoveryByAdvanceId[a.id];
+                  const isShort = a.status === 'recovered' && recovery && recovery.outstandingAmount > 0;
+                  return (
                   <tr key={a.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-800">{employeeName(a.employeeId)}</div>
@@ -136,7 +173,14 @@ function AdvancesModule({ employees, advances, setAdvances, settings, showToast 
                     <td className="px-4 py-3 font-medium text-slate-800">{formatCurrency(a.amount, settings.currency)}</td>
                     <td className="px-4 py-3 text-slate-600">{a.dateGiven}</td>
                     <td className="px-4 py-3 text-slate-600">{monthLabel(a.recoveryMonth)}</td>
-                    <td className="px-4 py-3"><Badge tone={advanceStatusTone(a.status)}>{advanceStatusLabel(a.status)}</Badge></td>
+                    <td className="px-4 py-3">
+                      <Badge tone={isShort ? 'amber' : advanceStatusTone(a.status)}>
+                        {isShort ? (recovery.recoveredAmount > 0 ? 'Partially Recovered' : 'Unrecovered') : advanceStatusLabel(a.status)}
+                      </Badge>
+                      {isShort && (
+                        <div className="text-[11px] text-amber-600 mt-1">Outstanding: {formatCurrency(recovery.outstandingAmount, settings.currency)}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-slate-500 max-w-[160px] truncate">{a.note || '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
@@ -149,7 +193,8 @@ function AdvancesModule({ employees, advances, setAdvances, settings, showToast 
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

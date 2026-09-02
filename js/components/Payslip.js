@@ -95,21 +95,31 @@ function PayslipModal({ employee, site, mess, monthStr, settings, result, onClos
                 </tr>
                 {result.messDeduction > 0 && (
                   <tr className="border-b border-slate-100">
-                    <td className="py-2 text-slate-600">Mess Deduction{mess ? ` (${mess.name})` : ''}</td>
-                    <td className="py-2 text-right font-medium text-rose-600">− {formatCurrency(result.messDeduction, settings.currency)}</td>
+                    <td className="py-2 text-slate-600 align-top">
+                      Mess Deduction{mess ? ` (${mess.name})` : ''}
+                      {result.appliedMessDeduction < result.messDeduction && (
+                        <div className="text-[11px] text-amber-600 mt-0.5">
+                          {formatCurrency(result.appliedMessDeduction, settings.currency)} of {formatCurrency(result.messDeduction, settings.currency)} — only partially covered this month
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-2 text-right font-medium text-rose-600 align-top">− {formatCurrency(result.appliedMessDeduction, settings.currency)}</td>
                   </tr>
                 )}
                 {result.advanceDeduction > 0 && (
                   <tr className="border-b border-slate-200">
                     <td className="py-2 text-slate-600 align-top">
                       Salary Advance Recovery
-                      {result.appliedAdvances.length > 1 && (
-                        <div className="text-[11px] text-slate-400 mt-0.5">
-                          {result.appliedAdvances.map((a) => `${formatCurrency(a.amount, settings.currency)} (${a.dateGiven})`).join(', ')}
-                        </div>
-                      )}
+                      <div className="text-[11px] text-slate-400 mt-0.5 space-y-0.5">
+                        {result.appliedAdvances.map((a) => (
+                          <div key={a.id} className={a.outstandingAmount > 0 ? 'text-amber-600' : ''}>
+                            {formatCurrency(a.recoveredAmount, settings.currency)} of {formatCurrency(a.amount, settings.currency)} ({a.dateGiven})
+                            {a.outstandingAmount > 0 && ` — ${formatCurrency(a.outstandingAmount, settings.currency)} outstanding`}
+                          </div>
+                        ))}
+                      </div>
                     </td>
-                    <td className="py-2 text-right font-medium text-rose-600 align-top">− {formatCurrency(result.advanceDeduction, settings.currency)}</td>
+                    <td className="py-2 text-right font-medium text-rose-600 align-top">− {formatCurrency(result.appliedAdvanceDeduction, settings.currency)}</td>
                   </tr>
                 )}
                 <tr>

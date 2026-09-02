@@ -170,7 +170,10 @@ function AuthenticatedApp({ username, onLogout }) {
     );
   } else if (tab === 'advances') {
     content = (
-      <AdvancesModule employees={employees} advances={advances} setAdvances={setAdvances} settings={settings} showToast={showToast} />
+      <AdvancesModule
+        employees={employees} advances={advances} setAdvances={setAdvances} settings={settings} showToast={showToast}
+        attendance={attendance} messExpenses={messExpenses} salaryRevisions={salaryRevisions} travelRecords={travelRecords}
+      />
     );
   } else if (tab === 'travel') {
     content = (

@@ -320,15 +320,17 @@ function attendanceDayCap(monthStr, mode) {
 }
 
 // Aggregate an employee's attendance stats for a given YYYY-MM month.
-// A day with no attendance record at all defaults to absent (no pay) —
-// unmarked is treated as worst-case by default, whether the day is in the
-// past, today, or later this month, so net payable reflects $0 until
-// attendance is actually logged rather than silently paying out for days
-// nobody has marked yet. Holiday and approved-travel days are tracked
-// separately from absences (not just skipped) so calculateEmployeePayroll
-// can credit them as paid days off.
+// A day with no attendance record at all defaults to absent (no pay) once
+// it's actually happened — today included, so net payable reflects $0 for
+// a fully-unmarked past rather than silently paying out for days nobody's
+// marked yet — but a day still to come in the pay period hasn't happened
+// yet, so it can't be an absence either; it's simply excluded from every
+// bucket until it does (or is marked). Holiday and approved-travel days
+// are tracked separately from absences (not just skipped) so
+// calculateEmployeePayroll can credit them as paid days off.
 function getMonthAttendanceStats(employeeId, monthStr, attendance, mode, holidays, travelRecords) {
   const totalDaysInMonth = attendanceDayCap(monthStr, mode);
+  const todayStr = todayISO();
 
   let presentDays = 0, halfDays = 0, absentDays = 0, holidayDays = 0, travelDays = 0, otUnits = 0, loggedDays = 0;
   for (let d = 1; d <= totalDaysInMonth; d++) {
@@ -340,12 +342,14 @@ function getMonthAttendanceStats(employeeId, monthStr, attendance, mode, holiday
       else if (record.status === 'halfday') halfDays++;
       else if (record.status === 'absent') absentDays++;
       otUnits += Number(record.otCount) || 0;
+    } else if (dateKey > todayStr) {
+      // Hasn't happened yet — not counted either way.
     } else if (isHolidayDate(dateKey, holidays)) {
       holidayDays++;
     } else if (isOnApprovedTravel(employeeId, dateKey, travelRecords)) {
       travelDays++;
     } else {
-      absentDays++; // day already passed with nothing logged -> defaults to absent
+      absentDays++; // today or already past, nothing logged -> defaults to absent
     }
   }
   return { presentDays, halfDays, absentDays, holidayDays, travelDays, otUnits, loggedDays };
@@ -436,10 +440,14 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   // day's pay earned for that day's overtime — no separate multiplier.
   const otEarnings = stats.otUnits * dailyRate;
 
+  // messDeduction/advanceDeduction below are the full amounts *due* this
+  // month — kept under these names since existing callers already read
+  // them that way — separate from what actually gets deducted (see the
+  // waterfall below), which can fall short once earnings run out.
   const messDeduction = employee.messId ? getEmployeeMessFee(employee.id, employee.messId, monthStr, messExpenses) : 0;
 
-  const appliedAdvances = getApplicableAdvances(employee.id, monthStr, advances);
-  const advanceDeduction = appliedAdvances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+  const dueAdvances = getApplicableAdvances(employee.id, monthStr, advances);
+  const advanceDeduction = dueAdvances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
   // Pay is computed from days actually earned, not deducted from a full
   // month and hoped to land right — presentDays and half-days count in
@@ -454,8 +462,33 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   const earnedDays = stats.presentDays + stats.halfDays * 0.5 + paidLeaveDays;
   const basePay = earnedDays * dailyRate;
 
-  const grandTotalDeductions = totalDeductions + messDeduction + advanceDeduction;
-  const netPayable = Math.max(0, basePay + otEarnings - messDeduction - advanceDeduction);
+  // Mess and advance recovery are applied sequentially against what's
+  // actually left, each capped rather than allowed to run negative — an
+  // advance recovery that exceeds this month's earnings only takes what's
+  // there, leaving the rest outstanding (see appliedAdvances below) rather
+  // than silently disappearing. This produces the exact same netPayable as
+  // a single Math.max(0, ...) clamp at the end would (each deduction here
+  // is individually floored at 0 mid-way, which is equivalent to flooring
+  // the whole sum once), so no one's actual pay changes — it only makes
+  // each deduction line reflect what was actually taken.
+  let available = Math.max(0, basePay + otEarnings);
+  const appliedMessDeduction = Math.min(messDeduction, available);
+  available -= appliedMessDeduction;
+
+  // Oldest advance first — a simple, defensible order when a shortfall
+  // means not everything due this month can be recovered.
+  const advancesOldestFirst = [...dueAdvances].sort((a, b) => (a.dateGiven < b.dateGiven ? -1 : 1));
+  let appliedAdvanceDeduction = 0;
+  const appliedAdvances = advancesOldestFirst.map((a) => {
+    const amount = Number(a.amount) || 0;
+    const recoveredAmount = Math.min(amount, available);
+    available -= recoveredAmount;
+    appliedAdvanceDeduction += recoveredAmount;
+    return { ...a, recoveredAmount, outstandingAmount: amount - recoveredAmount };
+  });
+
+  const grandTotalDeductions = totalDeductions + appliedMessDeduction + appliedAdvanceDeduction;
+  const netPayable = available;
 
   return {
     workingDays,
@@ -466,8 +499,10 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
     totalDeductions,
     otEarnings,
     messDeduction,
+    appliedMessDeduction,
     appliedAdvances,
     advanceDeduction,
+    appliedAdvanceDeduction,
     grandTotalDeductions,
     // The salary actually effective for monthStr, not employee.baseSalary --
     // kept under this field name since Payslip.js/Payroll.js already just

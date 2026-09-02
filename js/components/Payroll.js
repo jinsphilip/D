@@ -22,8 +22,8 @@ function PayrollModule({ employees, sites, messes, messExpenses, advances, salar
       base: acc.base + r.result.baseSalary,
       deductions: acc.deductions + r.result.grandTotalDeductions,
       ot: acc.ot + r.result.otEarnings,
-      mess: acc.mess + r.result.messDeduction,
-      advance: acc.advance + r.result.advanceDeduction,
+      mess: acc.mess + r.result.appliedMessDeduction,
+      advance: acc.advance + r.result.appliedAdvanceDeduction,
       net: acc.net + r.result.netPayable,
     }),
     { base: 0, deductions: 0, ot: 0, mess: 0, advance: 0, net: 0 }
@@ -94,8 +94,8 @@ function PayrollModule({ employees, sites, messes, messExpenses, advances, salar
                     </td>
                     <td className="px-4 py-3 text-center text-slate-600">{result.otUnits.toFixed(1)}</td>
                     <td className="px-4 py-3 text-right text-rose-600">{result.totalDeductions > 0 ? `− ${formatCurrency(result.totalDeductions, settings.currency)}` : '—'}</td>
-                    <td className="px-4 py-3 text-right text-rose-600">{result.messDeduction > 0 ? `− ${formatCurrency(result.messDeduction, settings.currency)}` : '—'}</td>
-                    <td className="px-4 py-3 text-right text-rose-600">{result.advanceDeduction > 0 ? `− ${formatCurrency(result.advanceDeduction, settings.currency)}` : '—'}</td>
+                    <td className="px-4 py-3 text-right text-rose-600">{result.appliedMessDeduction > 0 ? `− ${formatCurrency(result.appliedMessDeduction, settings.currency)}` : '—'}</td>
+                    <td className="px-4 py-3 text-right text-rose-600">{result.appliedAdvanceDeduction > 0 ? `− ${formatCurrency(result.appliedAdvanceDeduction, settings.currency)}` : '—'}</td>
                     <td className="px-4 py-3 text-right text-emerald-600">{result.otEarnings > 0 ? `+ ${formatCurrency(result.otEarnings, settings.currency)}` : '—'}</td>
                     <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCurrency(result.netPayable, settings.currency)}</td>
                     <td className="px-4 py-3 text-right">

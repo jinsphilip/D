@@ -12,10 +12,6 @@ function reportMessName(messes, messId) {
   return (messes.find((m) => m.id === messId) || {}).name || 'Not enrolled';
 }
 
-function advanceStatusLabel(status) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 function filterReportEmployees(employees, siteId, role, activeOnly) {
   let list = activeOnly ? employees.filter((e) => e.status === 'Active') : employees;
   if (siteId && siteId !== 'all') list = list.filter((e) => e.siteId === siteId);
@@ -127,17 +123,48 @@ const REPORT_TYPES = {
       { key: 'dateGiven', label: 'Date Given' },
       { key: 'amount', label: 'Amount', align: 'right', currency: true },
       { key: 'status', label: 'Status' },
+      { key: 'outstanding', label: 'Outstanding', align: 'right', currency: true },
       { key: 'note', label: 'Note' },
     ],
-    buildRows: (ctx) => [...ctx.advances]
-      .sort((a, b) => (a.dateGiven < b.dateGiven ? 1 : -1))
-      .map((a) => {
-        const emp = ctx.employees.find((e) => e.id === a.employeeId);
-        return {
-          employeeId: a.employeeId, name: emp ? emp.name : 'Unknown', dateGiven: dateLabel(a.dateGiven),
-          amount: Number(a.amount) || 0, status: advanceStatusLabel(getAdvanceStatus(a, currentMonthStr())), note: a.note || '—',
-        };
-      }),
+    buildRows: (ctx) => {
+      const refMonth = currentMonthStr();
+
+      // Group advances whose recovery month has fully passed by
+      // employee+month, so the payroll waterfall (which depends on every
+      // advance due that month together) runs once per group rather than
+      // once per advance, and tells us how much of each was actually
+      // recovered vs. left outstanding.
+      const groups = {};
+      ctx.advances.forEach((a) => {
+        if (getAdvanceStatus(a, refMonth) !== 'recovered') return;
+        const recoveryMonth = nextMonthStr(a.dateGiven.slice(0, 7));
+        const key = `${a.employeeId}|${recoveryMonth}`;
+        groups[key] = groups[key] || { employeeId: a.employeeId, recoveryMonth };
+      });
+      const recoveryById = {};
+      const extras = { employees: ctx.employees, messExpenses: ctx.messExpenses, advances: ctx.advances, salaryRevisions: ctx.salaryRevisions, travelRecords: ctx.travelRecords };
+      Object.values(groups).forEach(({ employeeId, recoveryMonth }) => {
+        const emp = ctx.employees.find((e) => e.id === employeeId);
+        if (!emp) return;
+        const result = calculateEmployeePayroll(emp, recoveryMonth, ctx.attendance, ctx.settings, extras);
+        result.appliedAdvances.forEach((r) => { recoveryById[r.id] = { recoveredAmount: r.recoveredAmount, outstandingAmount: r.outstandingAmount }; });
+      });
+
+      return [...ctx.advances]
+        .sort((a, b) => (a.dateGiven < b.dateGiven ? 1 : -1))
+        .map((a) => {
+          const emp = ctx.employees.find((e) => e.id === a.employeeId);
+          const status = getAdvanceStatus(a, refMonth);
+          const recovery = recoveryById[a.id];
+          const isShort = status === 'recovered' && recovery && recovery.outstandingAmount > 0;
+          return {
+            employeeId: a.employeeId, name: emp ? emp.name : 'Unknown', dateGiven: dateLabel(a.dateGiven),
+            amount: Number(a.amount) || 0,
+            status: isShort ? (recovery.recoveredAmount > 0 ? 'Partially Recovered' : 'Unrecovered') : advanceStatusLabel(status),
+            outstanding: recovery ? recovery.outstandingAmount : 0, note: a.note || '—',
+          };
+        });
+    },
   },
 
   mess: {

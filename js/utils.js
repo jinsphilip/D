@@ -377,12 +377,16 @@ function getMessMonthTotal(messId, monthStr, messExpenses) {
 
 // Salary advances recovered in a payroll month: any advance disbursed during
 // the immediately preceding calendar month shows up as a deduction here.
+// A deferred advance (recorded now, recovery schedule decided later) never
+// factors into any month's payroll until someone edits it and turns
+// deferral off — no automatic scheduling happens on its own.
 function getApplicableAdvances(employeeId, monthStr, advances) {
   const recoveryMonth = prevMonthStr(monthStr);
-  return advances.filter((a) => a.employeeId === employeeId && a.dateGiven.slice(0, 7) === recoveryMonth);
+  return advances.filter((a) => !a.deferred && a.employeeId === employeeId && a.dateGiven.slice(0, 7) === recoveryMonth);
 }
 
 function getAdvanceStatus(advance, referenceMonthStr) {
+  if (advance.deferred) return 'deferred';
   const recoveryMonth = nextMonthStr(advance.dateGiven.slice(0, 7));
   if (recoveryMonth === referenceMonthStr) return 'due';
   if (recoveryMonth < referenceMonthStr) return 'recovered';

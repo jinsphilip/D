@@ -1,19 +1,21 @@
 function advanceStatusTone(status) {
   if (status === 'recovered') return 'slate';
   if (status === 'due') return 'amber';
+  if (status === 'deferred') return 'purple';
   return 'blue';
 }
 
 function advanceStatusLabel(status) {
   if (status === 'recovered') return 'Recovered';
   if (status === 'due') return 'Deducting This Cycle';
+  if (status === 'deferred') return 'Deferred';
   return 'Upcoming';
 }
 
 function AdvanceForm({ advance, employees, onSave, onClose }) {
   const isEdit = !!advance;
   const [form, setForm] = React.useState(
-    advance || { employeeId: employees[0] ? employees[0].id : '', amount: '', dateGiven: todayISO(), note: '' }
+    advance || { employeeId: employees[0] ? employees[0].id : '', amount: '', dateGiven: todayISO(), note: '', deferred: false }
   );
 
   const submit = (e) => {
@@ -38,6 +40,18 @@ function AdvanceForm({ advance, employees, onSave, onClose }) {
         <Field label="Date Given" hint="Recovered from next month's payroll, up to what's actually earned">
           <input type="date" className={inputClass} value={form.dateGiven} max={todayISO()} onChange={(e) => setForm({ ...form, dateGiven: e.target.value })} required />
         </Field>
+        <label className="flex items-start gap-2.5 p-3 rounded-lg border border-slate-200 cursor-pointer touch-target">
+          <input
+            type="checkbox"
+            className="w-4 h-4 mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 shrink-0"
+            checked={!form.deferred}
+            onChange={(e) => setForm({ ...form, deferred: !e.target.checked })}
+          />
+          <span>
+            <span className="block text-sm font-medium text-slate-800">Schedule for recovery from next month's payroll</span>
+            <span className="block text-xs text-slate-400 mt-0.5">Uncheck to just record the advance now and decide the recovery schedule later — it won't be deducted from anyone's pay until you come back and turn this on.</span>
+          </span>
+        </label>
         <Field label="Note" hint="Optional">
           <input className={inputClass} value={form.note || ''} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="e.g. Family emergency" />
         </Field>
@@ -93,7 +107,8 @@ function AdvancesModule({ employees, advances, setAdvances, attendance, messExpe
 
   const totals = rows.reduce(
     (acc, a) => {
-      if (a.status === 'recovered') {
+      if (a.status === 'deferred') acc.deferred += a.amount;
+      else if (a.status === 'recovered') {
         const recovery = recoveryByAdvanceId[a.id];
         acc.recovered += recovery ? recovery.recoveredAmount : a.amount;
         acc.outstanding += recovery ? recovery.outstandingAmount : 0;
@@ -101,7 +116,7 @@ function AdvancesModule({ employees, advances, setAdvances, attendance, messExpe
       else acc.upcoming += a.amount;
       return acc;
     },
-    { due: 0, upcoming: 0, recovered: 0, outstanding: 0 }
+    { due: 0, upcoming: 0, recovered: 0, outstanding: 0, deferred: 0 }
   );
 
   const saveAdvance = (form) => {
@@ -136,7 +151,8 @@ function AdvancesModule({ employees, advances, setAdvances, attendance, messExpe
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <StatCard icon="pause-circle" label="Deferred" value={formatCurrency(totals.deferred, settings.currency)} tone="purple" />
         <StatCard icon="clock" label="Deducting This Cycle" value={formatCurrency(totals.due, settings.currency)} tone="amber" />
         <StatCard icon="hourglass" label="Upcoming" value={formatCurrency(totals.upcoming, settings.currency)} tone="blue" />
         <StatCard icon="check-circle-2" label="Recovered" value={formatCurrency(totals.recovered, settings.currency)} tone="slate" />
@@ -172,7 +188,7 @@ function AdvancesModule({ employees, advances, setAdvances, attendance, messExpe
                     </td>
                     <td className="px-4 py-3 font-medium text-slate-800">{formatCurrency(a.amount, settings.currency)}</td>
                     <td className="px-4 py-3 text-slate-600">{a.dateGiven}</td>
-                    <td className="px-4 py-3 text-slate-600">{monthLabel(a.recoveryMonth)}</td>
+                    <td className="px-4 py-3 text-slate-600">{a.status === 'deferred' ? '—' : monthLabel(a.recoveryMonth)}</td>
                     <td className="px-4 py-3">
                       <Badge tone={isShort ? 'amber' : advanceStatusTone(a.status)}>
                         {isShort ? (recovery.recoveredAmount > 0 ? 'Partially Recovered' : 'Unrecovered') : advanceStatusLabel(a.status)}

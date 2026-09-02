@@ -290,32 +290,33 @@ function shortDateLabel(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
 }
 
+// A fixed pay period only has that many chargeable days — capped to the
+// real month length when it's shorter (February always is, under "Fixed 30
+// Days" mode), so an employee present every real day of a short month can
+// still reach 100% of salary instead of being structurally capped below it.
 function getWorkingDaysInMonth(monthStr, mode, holidays) {
-  if (mode === '30') return 30;
+  const total = daysInCalendarMonth(monthStr);
+  if (mode === '30') return Math.min(total, 30);
   if (mode === 'actual') {
-    const total = daysInCalendarMonth(monthStr);
     let count = 0;
     for (let d = 1; d <= total; d++) {
       if (!isHolidayDate(`${monthStr}-${pad2(d)}`, holidays)) count++;
     }
     return count;
   }
-  return 26; // Standard 26-day mode (default)
+  return Math.min(total, 26); // Standard 26-day mode (default)
 }
 
-// A fixed 26/30-day pay period only has that many chargeable days,
-// regardless of how many days the real calendar month has — so a 31-day
-// month under "Fixed 30 Days" mode must stop counting at day 30, not walk
-// all 31 real days. Otherwise an employee present on just one day near the
-// end of a long month can rack up more absent-day deductions than the
-// mode's own daily-rate divisor accounts for, wiping out the entire base
-// salary instead of just the days actually missed. "Actual Calendar Days"
-// mode has no such mismatch — its divisor already equals the real month
-// length — so it isn't capped here.
+// The attendance loop's day range must match the daily-rate divisor
+// exactly for fixed modes (26/30), or the two drift apart on months whose
+// length doesn't match the mode — so it's derived from the same function
+// rather than a second hand-written cap. "Actual Calendar Days" mode is
+// the one exception: its divisor already excludes holidays, but the loop
+// still needs to walk every real calendar day to identify which ones those
+// are (see getMonthAttendanceStats).
 function attendanceDayCap(monthStr, mode) {
-  const total = daysInCalendarMonth(monthStr);
-  if (mode === 'actual') return total;
-  return Math.min(total, mode === '30' ? 30 : 26);
+  if (mode === 'actual') return daysInCalendarMonth(monthStr);
+  return getWorkingDaysInMonth(monthStr, mode, null);
 }
 
 // Aggregate an employee's attendance stats for a given YYYY-MM month.
@@ -323,11 +324,13 @@ function attendanceDayCap(monthStr, mode) {
 // unmarked is treated as worst-case by default, whether the day is in the
 // past, today, or later this month, so net payable reflects $0 until
 // attendance is actually logged rather than silently paying out for days
-// nobody has marked yet.
+// nobody has marked yet. Holiday and approved-travel days are tracked
+// separately from absences (not just skipped) so calculateEmployeePayroll
+// can credit them as paid days off.
 function getMonthAttendanceStats(employeeId, monthStr, attendance, mode, holidays, travelRecords) {
   const totalDaysInMonth = attendanceDayCap(monthStr, mode);
 
-  let presentDays = 0, halfDays = 0, absentDays = 0, otUnits = 0, loggedDays = 0;
+  let presentDays = 0, halfDays = 0, absentDays = 0, holidayDays = 0, travelDays = 0, otUnits = 0, loggedDays = 0;
   for (let d = 1; d <= totalDaysInMonth; d++) {
     const dateKey = `${monthStr}-${pad2(d)}`;
     const record = attendance[dateKey] && attendance[dateKey][employeeId];
@@ -337,14 +340,15 @@ function getMonthAttendanceStats(employeeId, monthStr, attendance, mode, holiday
       else if (record.status === 'halfday') halfDays++;
       else if (record.status === 'absent') absentDays++;
       otUnits += Number(record.otCount) || 0;
-    } else if (!isHolidayDate(dateKey, holidays) && !isOnApprovedTravel(employeeId, dateKey, travelRecords)) {
-      // Only dates explicitly listed in Settings (or covered by approved
-      // travel) skip the default-absent deduction when left unmarked — a
-      // Sunday is an ordinary day unless it's been added to that list.
-      absentDays++;
+    } else if (isHolidayDate(dateKey, holidays)) {
+      holidayDays++;
+    } else if (isOnApprovedTravel(employeeId, dateKey, travelRecords)) {
+      travelDays++;
+    } else {
+      absentDays++; // day already passed with nothing logged -> defaults to absent
     }
   }
-  return { presentDays, halfDays, absentDays, otUnits, loggedDays };
+  return { presentDays, halfDays, absentDays, holidayDays, travelDays, otUnits, loggedDays };
 }
 
 // Number of currently-active employees enrolled in a given mess
@@ -419,6 +423,11 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   const dailyRate = workingDays > 0 ? effectiveSalary / workingDays : 0;
   const stats = getMonthAttendanceStats(employee.id, monthStr, attendance, settings.daysInMonthMode, settings.holidays, travelRecords);
 
+  // absentDeduction/halfDayDeduction are kept even though netPayable below
+  // no longer subtracts them from effectiveSalary — they still drive the
+  // Payslip's line-by-line breakdown ("Absenteeism Deduction (N days)"
+  // etc.), and stay numerically consistent with the earned-days total by
+  // construction (see the proof in the payroll fix's plan notes).
   const absentDeduction = stats.absentDays * dailyRate;
   const halfDayDeduction = stats.halfDays * 0.5 * dailyRate;
   const totalDeductions = absentDeduction + halfDayDeduction;
@@ -432,8 +441,21 @@ function calculateEmployeePayroll(employee, monthStr, attendance, settings, extr
   const appliedAdvances = getApplicableAdvances(employee.id, monthStr, advances);
   const advanceDeduction = appliedAdvances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
 
+  // Pay is computed from days actually earned, not deducted from a full
+  // month and hoped to land right — presentDays and half-days count in
+  // full/half, and holiday/approved-travel days count as fully paid too
+  // (they were never worked, but aren't absences either). Under "Actual
+  // Calendar Days" mode, holidays are excluded from the divisor itself
+  // (fewer days to divide the salary across), so crediting them again here
+  // would double-pay for the same day — fixed modes don't exclude them
+  // from the divisor, so they need the explicit credit to stay unpaid-for
+  // as intended (matching how they were already never deducted).
+  const paidLeaveDays = stats.travelDays + (settings.daysInMonthMode === 'actual' ? 0 : stats.holidayDays);
+  const earnedDays = stats.presentDays + stats.halfDays * 0.5 + paidLeaveDays;
+  const basePay = earnedDays * dailyRate;
+
   const grandTotalDeductions = totalDeductions + messDeduction + advanceDeduction;
-  const netPayable = Math.max(0, effectiveSalary - grandTotalDeductions + otEarnings);
+  const netPayable = Math.max(0, basePay + otEarnings - messDeduction - advanceDeduction);
 
   return {
     workingDays,

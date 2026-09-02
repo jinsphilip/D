@@ -159,7 +159,7 @@ function SettingsModule({ settings, setSettings, showToast, username }) {
 
   const modes = [
     { key: '26', label: 'Standard 26 Days', hint: 'Flat 26-day baseline, regardless of listed holidays' },
-    { key: '30', label: 'Fixed 30 Days', hint: 'Flat month length' },
+    { key: '30', label: 'Fixed 30 Days', hint: "Up to 30 days, or the month's real length if shorter (e.g. February)" },
     { key: 'actual', label: 'Actual Calendar Days', hint: 'Excludes only the holidays listed below' },
   ];
 
